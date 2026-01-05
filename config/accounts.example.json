@@ -1,0 +1,31 @@
+{
+  "accounts": [
+    {
+      "accountId": "account1",
+      "enabled": true,
+      "vaultNumber": "+91XXXXXXXXXX",
+      "description": "Main Account",
+      "modules": {
+        "movieBot": {
+          "enabled": true,
+          "allowedGroups": [],
+          "commandPrefix": "!",
+          "rateLimit": {
+            "maxRequests": 10,
+            "windowMs": 60000
+          },
+          "timeout": 20000,
+          "maxRetries": 10
+        },
+        "stealthLogger": {
+          "enabled": true,
+          "excludedGroups": [],
+          "statusCacheDuration": 86400000,
+          "mediaCacheDuration": 244800000,
+          "maxFileSize": 157286400,
+          "maxTextCache": 5000
+        }
+      }
+    }
+  ]
+}
