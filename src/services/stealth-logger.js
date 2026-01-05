@@ -68,10 +68,13 @@ class StealthLoggerService {
       this.textCache.delete(oldestKey);
     }
 
+    // Use participant for actual sender in groups/status, fallback to remoteJid
+    const actualSenderId = message.key.participant || message.key.remoteJid;
+
     this.textCache.set(messageId, {
       text,
       sender: senderName,
-      senderId: message.key.remoteJid,
+      senderId: actualSenderId,
       timestamp: message.messageTimestamp,
       groupName,
       cachedAt: Date.now()
@@ -162,12 +165,15 @@ class StealthLoggerService {
       const filepath = path.join(this.tempStorage, filename);
       await fs.writeFile(filepath, buffer);
 
+      // Use participant for actual sender in groups/status, fallback to remoteJid
+      const actualSenderId = message.key.participant || message.key.remoteJid;
+
       // Cache metadata
       this.mediaCache.set(message.key.id, {
         filepath,
         type: mediaType,
         sender: senderName,
-        senderId: message.key.remoteJid,
+        senderId: actualSenderId,
         timestamp: message.messageTimestamp,
         groupName,
         caption,
@@ -261,12 +267,15 @@ class StealthLoggerService {
 
       logger.success(`Saved view-once ${mediaType}: ${filename}`);
 
+      // Use participant for actual sender in groups/status, fallback to remoteJid
+      const actualSenderId = message.key.participant || message.key.remoteJid;
+
       // Cache metadata
       this.mediaCache.set(message.key.id, {
         filepath,
         type: mediaType,
         sender: senderName,
-        senderId: message.key.remoteJid,
+        senderId: actualSenderId,
         timestamp: message.messageTimestamp,
         groupName,
         caption,
@@ -278,7 +287,7 @@ class StealthLoggerService {
         filepath,
         type: mediaType,
         sender: senderName,
-        senderId: message.key.remoteJid,
+        senderId: actualSenderId,
         timestamp: message.messageTimestamp,
         groupName,
         caption

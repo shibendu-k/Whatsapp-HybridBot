@@ -164,6 +164,16 @@ class AccountManager {
                                  msgContent?.videoMessage?.viewOnce || 
                                  msgContent?.audioMessage?.viewOnce;
 
+        // Debug logging for view-once detection (set VIEW_ONCE_DEBUG=true to enable)
+        if (process.env.VIEW_ONCE_DEBUG === 'true' && (msgContent?.imageMessage || msgContent?.videoMessage)) {
+          logger.debug(`[VIEW-ONCE DEBUG] Message keys: ${Object.keys(msgContent || {}).join(', ')}`);
+          if (msgContent?.imageMessage) logger.debug(`[VIEW-ONCE DEBUG] imageMessage.viewOnce: ${msgContent.imageMessage.viewOnce}`);
+          if (msgContent?.videoMessage) logger.debug(`[VIEW-ONCE DEBUG] videoMessage.viewOnce: ${msgContent.videoMessage.viewOnce}`);
+          if (msgContent?.viewOnceMessage) logger.debug(`[VIEW-ONCE DEBUG] Has viewOnceMessage`);
+          if (msgContent?.viewOnceMessageV2) logger.debug(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2`);
+          if (msgContent?.viewOnceMessageV2Extension) logger.debug(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2Extension`);
+        }
+
         // Handle view-once messages (all variants)
         if (msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
             msgContent?.viewOnceMessageV2Extension || isViewOnceMedia) {
