@@ -1,10 +1,22 @@
 const makeWASocket = require('@whiskeysockets/baileys').default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs-extra');
 const path = require('path');
 const logger = require('./utils/logger');
 const { sleep, getRandomDelay } = require('./utils/helpers');
+
+// Pino-compatible logger for Baileys (reusable)
+const baileysLogger = {
+  level: 'silent',
+  fatal: () => {},
+  error: () => {},
+  warn: () => {},
+  info: () => {},
+  debug: () => {},
+  trace: () => {},
+  child: () => baileysLogger
+};
 
 class BaileysClient {
   constructor(accountId, config, vaultNumber) {
@@ -38,18 +50,6 @@ class BaileysClient {
       // Fetch latest Baileys version
       const { version } = await fetchLatestBaileysVersion();
       
-      // Create Pino-compatible logger for Baileys
-      const baileysLogger = {
-        level: 'silent',
-        fatal: () => {},
-        error: () => {},
-        warn: () => {},
-        info: () => {},
-        debug: () => {},
-        trace: () => {},
-        child: () => baileysLogger  // Return self for child loggers
-      };
-
       // Create socket connection
       this.sock = makeWASocket({
         version,
@@ -198,18 +198,8 @@ class BaileysClient {
    */
   async downloadMediaMessage(message) {
     try {
-      const downloadMediaMessage = require('@whiskeysockets/baileys').downloadMediaMessage;
       return await downloadMediaMessage(message, 'buffer', {}, {
-        logger: {
-          level: 'silent',
-          fatal: () => {},
-          error: () => {},
-          warn: () => {},
-          info: () => {},
-          debug: () => {},
-          trace: () => {},
-          child: () => ({ level: 'silent', fatal: () => {}, error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, trace: () => {}, child: () => ({}) })
-        },
+        logger: baileysLogger,
         reuploadRequest: this.sock.updateMediaMessage
       });
     } catch (error) {

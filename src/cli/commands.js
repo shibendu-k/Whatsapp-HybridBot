@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const { program } = require('commander');
+const inquirer = require('inquirer');
 const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
@@ -189,8 +190,6 @@ async function validateConfig() {
  * Reset all sessions
  */
 async function resetSessions() {
-  const inquirer = require('inquirer');
-  
   const { confirm } = await inquirer.prompt([
     {
       type: 'confirm',
@@ -221,8 +220,6 @@ async function resetSessions() {
  * Factory reset - delete everything
  */
 async function factoryReset() {
-  const inquirer = require('inquirer');
-  
   console.log(chalk.red('\n⚠️  FACTORY RESET - THIS CANNOT BE UNDONE\n'));
   
   const { confirm } = await inquirer.prompt([

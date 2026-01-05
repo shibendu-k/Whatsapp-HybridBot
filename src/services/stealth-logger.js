@@ -2,7 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const mime = require('mime-types');
 const logger = require('../utils/logger');
-const { formatTimestamp, maskPhoneNumber, generateId, cleanOldFiles } = require('../utils/helpers');
+const { formatTimestamp, maskPhoneNumber, generateId, cleanOldFiles, matchesGroupName, getMessageContent } = require('../utils/helpers');
 
 class StealthLoggerService {
   constructor(config, accountId) {
@@ -28,8 +28,7 @@ class StealthLoggerService {
       return false;
     }
     
-    const helpers = require('../utils/helpers');
-    return helpers.matchesGroupName(groupName, this.config.excludedGroups);
+    return matchesGroupName(groupName, this.config.excludedGroups);
   }
 
   /**
@@ -44,9 +43,8 @@ class StealthLoggerService {
       return;
     }
 
-    const helpers = require('../utils/helpers');
     const messageId = message.key.id;
-    const text = helpers.getMessageContent(message.message);
+    const text = getMessageContent(message.message);
     
     if (!text || message.key.fromMe) return;
 
@@ -267,8 +265,8 @@ class StealthLoggerService {
 
       const vaultJid = vaultNumber.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
       
-      const helpers = require('../utils/helpers');
-      const maskedId = maskPhoneNumber(helpers.getPhoneFromJid(data.senderId));
+      const { getPhoneFromJid } = require('../utils/helpers');
+      const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
       let message = `🗑️ *Deleted Text*\n`;
@@ -305,8 +303,8 @@ class StealthLoggerService {
 
       const vaultJid = vaultNumber.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
       
-      const helpers = require('../utils/helpers');
-      const maskedId = maskPhoneNumber(helpers.getPhoneFromJid(data.senderId));
+      const { getPhoneFromJid } = require('../utils/helpers');
+      const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
       let caption = `📸 *View-Once ${data.type.toUpperCase()}*\n`;
@@ -355,19 +353,15 @@ class StealthLoggerService {
 
   /**
    * Handle status messages
+   * Note: Status capture functionality is reserved for future implementation
+   * when WhatsApp status API becomes more stable in Baileys.
    * @param {object} message - Status message
    * @param {object} client - Baileys client
    */
   async handleStatus(message, client) {
-    try {
-      logger.info('📢 Status message detected');
-      
-      // Status messages could be captured and sent to vault
-      // Implementation depends on requirements
-      
-    } catch (error) {
-      logger.error('Failed to handle status', error);
-    }
+    // Status capture not yet implemented
+    // Would require handling of status updates separately
+    logger.debug('Status message detected (not yet captured)');
   }
 
   /**

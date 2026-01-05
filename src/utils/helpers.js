@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs-extra');
+const path = require('path');
 
 /**
  * Mask phone number for privacy
@@ -153,9 +155,6 @@ function generateId() {
  * @param {number} maxAge - Max age in milliseconds
  */
 async function cleanOldFiles(directory, maxAge) {
-  const fs = require('fs-extra');
-  const path = require('path');
-  
   if (!await fs.pathExists(directory)) return;
   
   const files = await fs.readdir(directory);
