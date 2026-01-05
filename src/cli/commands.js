@@ -1,8 +1,10 @@
 #!/usr/bin/env node
+require('dotenv').config();
 const { program } = require('commander');
 const inquirer = require('inquirer');
 const fs = require('fs-extra');
 const path = require('path');
+const os = require('os');
 const chalk = require('chalk');
 const axios = require('axios');
 
@@ -88,7 +90,7 @@ function showSystem() {
   console.log(`  Architecture: ${chalk.green(process.arch)}`);
   console.log(`  Memory (Heap): ${chalk.cyan(Math.round(memoryUsage.heapUsed / 1024 / 1024))} MB / ${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`);
   console.log(`  Memory (RSS): ${chalk.cyan(Math.round(memoryUsage.rss / 1024 / 1024))} MB`);
-  console.log(`  Uptime: ${chalk.cyan(Math.floor(process.uptime()))} seconds`);
+  console.log(`  Uptime: ${chalk.cyan(Math.floor(os.uptime()))} seconds`);
   
   console.log(chalk.gray('─'.repeat(50) + '\n'));
 }
