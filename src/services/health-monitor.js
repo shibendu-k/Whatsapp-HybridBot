@@ -558,10 +558,22 @@ class HealthMonitor {
         let displayName = chat.name || 'Unknown';
         // If not a group, mask the phone number portion (handles @lid, @s.whatsapp.net formats)
         if (!chat.isGroup) {
-          // Extract just the number part and mask it
-          const numberMatch = displayName.match(/^([0-9]+)/);
-          if (numberMatch) {
-            displayName = maskPhoneNumber(numberMatch[1]);
+          // Check if name already contains "Linked Contact" format
+          if (displayName.startsWith('Linked Contact')) {
+            // Already formatted, keep as is
+          }
+          // Check if it's a raw JID or just numbers
+          else if (displayName.includes('@') || /^[0-9]+$/.test(displayName)) {
+            // Extract just the number part and mask it
+            const numberMatch = displayName.match(/([0-9]+)/);
+            if (numberMatch) {
+              // Check if it's a LID
+              if (displayName.includes('@lid') || chat.jid?.includes('@lid')) {
+                displayName = 'Linked Contact (' + numberMatch[1].slice(-4) + ')';
+              } else {
+                displayName = maskPhoneNumber(numberMatch[1]);
+              }
+            }
           }
         }
         return `
@@ -573,6 +585,7 @@ class HealthMonitor {
         </div>
         <div class="chat-badges">
           <span class="chat-badge">${chat.isGroup ? 'GROUP' : 'PRIVATE'}</span>
+          ${chat.jid?.includes('@lid') ? '<span class="chat-badge">LINKED</span>' : ''}
         </div>
       </div>
       `;

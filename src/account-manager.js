@@ -160,10 +160,15 @@ class AccountManager {
         senderName = await client.getContactName(remoteJid);
       }
 
-      // Fallback: if senderName looks like a LID or unknown format, try to extract phone
-      if (!senderName || senderName.includes('@lid') || senderName === 'status') {
+      // Fallback: if senderName looks like a LID, raw number, or unknown format, try to extract phone
+      if (!senderName || senderName.includes('@') || senderName === 'status') {
         const phone = getPhoneFromJid(actualSenderJid);
-        senderName = phone || 'Unknown';
+        // Check if it's a LID number (linked ID) - format as "Linked Contact"
+        if (actualSenderJid.includes('@lid')) {
+          senderName = `Linked Contact (${phone.slice(-4)})`;
+        } else {
+          senderName = phone || 'Unknown';
+        }
       }
 
       // Register session (skip status@broadcast)
@@ -183,14 +188,50 @@ class AccountManager {
                                  msgContent?.videoMessage?.viewOnce || 
                                  msgContent?.audioMessage?.viewOnce;
 
-        // Debug logging for view-once detection (set VIEW_ONCE_DEBUG=true to enable)
-        if (process.env.VIEW_ONCE_DEBUG === 'true' && (msgContent?.imageMessage || msgContent?.videoMessage)) {
-          logger.debug(`[VIEW-ONCE DEBUG] Message keys: ${Object.keys(msgContent || {}).join(', ')}`);
-          if (msgContent?.imageMessage) logger.debug(`[VIEW-ONCE DEBUG] imageMessage.viewOnce: ${msgContent.imageMessage.viewOnce}`);
-          if (msgContent?.videoMessage) logger.debug(`[VIEW-ONCE DEBUG] videoMessage.viewOnce: ${msgContent.videoMessage.viewOnce}`);
-          if (msgContent?.viewOnceMessage) logger.debug(`[VIEW-ONCE DEBUG] Has viewOnceMessage`);
-          if (msgContent?.viewOnceMessageV2) logger.debug(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2`);
-          if (msgContent?.viewOnceMessageV2Extension) logger.debug(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2Extension`);
+        // ENHANCED Debug logging for view-once detection (set VIEW_ONCE_DEBUG=true to enable)
+        if (process.env.VIEW_ONCE_DEBUG === 'true') {
+          logger.info(`[VIEW-ONCE DEBUG] ========== NEW MESSAGE ==========`);
+          logger.info(`[VIEW-ONCE DEBUG] From: ${senderName} | RemoteJid: ${remoteJid}`);
+          logger.info(`[VIEW-ONCE DEBUG] Message keys: ${Object.keys(msgContent || {}).join(', ')}`);
+          
+          // Log each message type
+          if (msgContent?.imageMessage) {
+            logger.info(`[VIEW-ONCE DEBUG] Has imageMessage - viewOnce: ${msgContent.imageMessage.viewOnce}`);
+          }
+          if (msgContent?.videoMessage) {
+            logger.info(`[VIEW-ONCE DEBUG] Has videoMessage - viewOnce: ${msgContent.videoMessage.viewOnce}`);
+          }
+          if (msgContent?.audioMessage) {
+            logger.info(`[VIEW-ONCE DEBUG] Has audioMessage - viewOnce: ${msgContent.audioMessage.viewOnce}`);
+          }
+          if (msgContent?.viewOnceMessage) {
+            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessage wrapper`);
+            logger.info(`[VIEW-ONCE DEBUG] viewOnceMessage.message keys: ${Object.keys(msgContent.viewOnceMessage.message || {}).join(', ')}`);
+          }
+          if (msgContent?.viewOnceMessageV2) {
+            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2 wrapper`);
+            logger.info(`[VIEW-ONCE DEBUG] viewOnceMessageV2.message keys: ${Object.keys(msgContent.viewOnceMessageV2.message || {}).join(', ')}`);
+          }
+          if (msgContent?.viewOnceMessageV2Extension) {
+            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2Extension wrapper`);
+          }
+          if (msgContent?.ephemeralMessage) {
+            logger.info(`[VIEW-ONCE DEBUG] Has ephemeralMessage wrapper`);
+            const ephContent = msgContent.ephemeralMessage.message;
+            if (ephContent) {
+              logger.info(`[VIEW-ONCE DEBUG] ephemeralMessage.message keys: ${Object.keys(ephContent).join(', ')}`);
+              if (ephContent.viewOnceMessage) logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessage INSIDE ephemeral`);
+              if (ephContent.viewOnceMessageV2) logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2 INSIDE ephemeral`);
+              if (ephContent.imageMessage?.viewOnce) logger.info(`[VIEW-ONCE DEBUG] Has imageMessage.viewOnce=true INSIDE ephemeral`);
+              if (ephContent.videoMessage?.viewOnce) logger.info(`[VIEW-ONCE DEBUG] Has videoMessage.viewOnce=true INSIDE ephemeral`);
+            }
+          }
+          
+          // Detection result
+          const willDetect = !!(msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
+                               msgContent?.viewOnceMessageV2Extension || isViewOnceMedia);
+          logger.info(`[VIEW-ONCE DEBUG] Will detect as view-once: ${willDetect}`);
+          logger.info(`[VIEW-ONCE DEBUG] ================================`);
         }
 
         // Handle view-once messages (all variants)
