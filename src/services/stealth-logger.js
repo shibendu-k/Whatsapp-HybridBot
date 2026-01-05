@@ -384,7 +384,7 @@ class StealthLoggerService {
       
       message += `\n📄 Content:\n${data.text}`;
 
-      await client.sendMessage(vaultJid, { text: message });
+      await client.sendMessage(vaultJid, message);
       logger.success('Sent deleted text to vault');
     } catch (error) {
       logger.error('Failed to send text to vault', error);
@@ -433,26 +433,33 @@ class StealthLoggerService {
       const buffer = await fs.readFile(data.filepath);
       const mimeType = mime.lookup(data.filepath) || 'application/octet-stream';
 
+      // Use sock.sendMessage directly to send media with full options
+      const sock = client.sock;
+      if (!sock) {
+        logger.error('Client socket not available');
+        return;
+      }
+
       if (data.type === 'image') {
-        await client.sendMessage(vaultJid, {
+        await sock.sendMessage(vaultJid, {
           image: buffer,
           caption,
           mimetype: mimeType
         });
       } else if (data.type === 'video') {
-        await client.sendMessage(vaultJid, {
+        await sock.sendMessage(vaultJid, {
           video: buffer,
           caption,
           mimetype: mimeType
         });
       } else if (data.type === 'audio') {
-        await client.sendMessage(vaultJid, {
+        await sock.sendMessage(vaultJid, {
           audio: buffer,
           mimetype: mimeType,
           ptt: true
         });
       } else if (data.type === 'document') {
-        await client.sendMessage(vaultJid, {
+        await sock.sendMessage(vaultJid, {
           document: buffer,
           caption,
           mimetype: mimeType,
@@ -460,7 +467,7 @@ class StealthLoggerService {
         });
       } else if (data.type === 'sticker') {
         // Send sticker as image with caption since stickers can't have captions
-        await client.sendMessage(vaultJid, {
+        await sock.sendMessage(vaultJid, {
           image: buffer,
           caption,
           mimetype: 'image/webp'
