@@ -38,19 +38,24 @@ class BaileysClient {
       // Fetch latest Baileys version
       const { version } = await fetchLatestBaileysVersion();
       
+      // Create Pino-compatible logger for Baileys
+      const baileysLogger = {
+        level: 'silent',
+        fatal: () => {},
+        error: () => {},
+        warn: () => {},
+        info: () => {},
+        debug: () => {},
+        trace: () => {},
+        child: () => baileysLogger  // Return self for child loggers
+      };
+
       // Create socket connection
       this.sock = makeWASocket({
         version,
         auth: state,
         printQRInTerminal: false, // We'll handle QR ourselves
-        logger: {
-          level: 'silent', // Reduce Baileys logging noise
-          info: () => {},
-          error: () => {},
-          warn: () => {},
-          debug: () => {},
-          trace: () => {}
-        },
+        logger: baileysLogger,
         browser: ['WhatsApp Hybrid Bot', 'Chrome', '3.2.0'],
         syncFullHistory: false,
         markOnlineOnConnect: false,
@@ -195,7 +200,16 @@ class BaileysClient {
     try {
       const downloadMediaMessage = require('@whiskeysockets/baileys').downloadMediaMessage;
       return await downloadMediaMessage(message, 'buffer', {}, {
-        logger: this.sock.logger,
+        logger: {
+          level: 'silent',
+          fatal: () => {},
+          error: () => {},
+          warn: () => {},
+          info: () => {},
+          debug: () => {},
+          trace: () => {},
+          child: () => ({ level: 'silent', fatal: () => {}, error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, trace: () => {}, child: () => ({}) })
+        },
         reuploadRequest: this.sock.updateMediaMessage
       });
     } catch (error) {

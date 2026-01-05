@@ -114,7 +114,16 @@ class StealthLoggerService {
         'buffer',
         {},
         {
-          logger: client.logger,
+          logger: {
+            level: 'silent',
+            fatal: () => {},
+            error: () => {},
+            warn: () => {},
+            info: () => {},
+            debug: () => {},
+            trace: () => {},
+            child: () => ({ level: 'silent', fatal: () => {}, error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, trace: () => {}, child: () => ({}) })
+          },
           reuploadRequest: client.updateMediaMessage
         }
       );
