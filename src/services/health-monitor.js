@@ -554,18 +554,26 @@ class HealthMonitor {
     </div>
     
     <div class="chat-grid">
-      ${sessions.map(chat => `
+      ${sessions.map(chat => {
+        // Mask phone numbers in chat name/id for privacy
+        let displayName = chat.name || 'Unknown';
+        // If not a group, mask the phone number portion
+        if (!chat.isGroup && displayName.match(/^[0-9]+$/)) {
+          displayName = maskPhoneNumber(displayName);
+        }
+        return `
       <div class="chat-card">
         <div class="chat-icon">${chat.isGroup ? '👥' : '👤'}</div>
         <div class="chat-info">
-          <div class="chat-name">${chat.name || 'Unknown'}</div>
+          <div class="chat-name">${displayName}</div>
           <div class="chat-id">First seen: ${new Date(chat.firstSeen).toLocaleString()}</div>
         </div>
         <div class="chat-badges">
           <span class="chat-badge">${chat.isGroup ? 'GROUP' : 'PRIVATE'}</span>
         </div>
       </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
     ` : `
     <div class="empty-state">

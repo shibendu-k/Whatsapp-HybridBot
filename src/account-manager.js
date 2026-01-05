@@ -129,30 +129,47 @@ class AccountManager {
 
       // Extract message info
       const { key, message: msgContent, messageTimestamp } = message;
-      const { remoteJid, fromMe } = key;
+      const { remoteJid, fromMe, participant } = key;
 
       // Skip own messages for most processing
       if (fromMe) return;
 
-      // Get sender info
-      const senderPhone = getPhoneFromJid(remoteJid);
-      let senderName = senderPhone;
+      // Get sender info - handle different chat types
+      let senderName = '';
       let groupName = null;
+      let actualSenderJid = remoteJid; // Default to remoteJid for private chats
 
+      // Handle status broadcasts - status@broadcast with participant
+      if (remoteJid === 'status@broadcast') {
+        actualSenderJid = participant || remoteJid;
+        senderName = await client.getContactName(actualSenderJid);
+        groupName = 'Status Update';
+      }
       // Check if group chat
-      if (isGroupChat(remoteJid)) {
+      else if (isGroupChat(remoteJid)) {
         const groupMetadata = await client.getGroupMetadata(remoteJid);
         groupName = groupMetadata?.subject || 'Unknown Group';
         
-        // Get actual sender in group
-        const participantJid = key.participant || remoteJid;
-        senderName = await client.getContactName(participantJid);
-      } else {
+        // Get actual sender in group - participant contains the sender
+        actualSenderJid = participant || remoteJid;
+        senderName = await client.getContactName(actualSenderJid);
+      } 
+      // Private DM - use remoteJid directly
+      else {
+        actualSenderJid = remoteJid;
         senderName = await client.getContactName(remoteJid);
       }
 
-      // Register session
-      this.registerSession(remoteJid, groupName);
+      // Fallback: if senderName looks like a LID or unknown format, try to extract phone
+      if (!senderName || senderName.includes('@lid') || senderName === 'status') {
+        const phone = getPhoneFromJid(actualSenderJid);
+        senderName = phone || 'Unknown';
+      }
+
+      // Register session (skip status@broadcast)
+      if (remoteJid !== 'status@broadcast') {
+        this.registerSession(remoteJid, groupName);
+      }
 
       // STEALTH LOGGER PROCESSING
       if (account.stealthLogger) {
