@@ -22,7 +22,9 @@ class StealthLoggerService {
     this.accountId = accountId;
     this.textCache = new Map(); // Cache text messages
     this.mediaCache = new Map(); // Cache media metadata
-    this.tempStorage = process.env.TEMP_STORAGE_PATH || './temp_storage';
+    // Use account-specific temp storage folder for easier debugging
+    const baseTempStorage = process.env.TEMP_STORAGE_PATH || './temp_storage';
+    this.tempStorage = path.join(baseTempStorage, accountId);
     
     fs.ensureDirSync(this.tempStorage);
     
@@ -193,24 +195,42 @@ class StealthLoggerService {
         return;
       }
 
-      const viewOnceMsg = message.message?.viewOnceMessage || message.message?.viewOnceMessageV2;
-      if (!viewOnceMsg) return;
-
-      logger.info(`📸 View-once message detected from ${senderName}`);
-
-      // Extract the nested message content
-      const content = viewOnceMsg.message;
-      if (!content) return;
-
+      let content = null;
       let mediaType = null;
       let extension = null;
+      let caption = '';
+
+      // Handle wrapped view-once message variants
+      const viewOnceMsg = message.message?.viewOnceMessage || 
+                          message.message?.viewOnceMessageV2 || 
+                          message.message?.viewOnceMessageV2Extension;
+      
+      if (viewOnceMsg) {
+        content = viewOnceMsg.message;
+      } else {
+        // Handle view-once media with viewOnce: true property directly on the message
+        const msgContent = message.message;
+        if (msgContent?.imageMessage?.viewOnce) {
+          content = { imageMessage: msgContent.imageMessage };
+        } else if (msgContent?.videoMessage?.viewOnce) {
+          content = { videoMessage: msgContent.videoMessage };
+        } else if (msgContent?.audioMessage?.viewOnce) {
+          content = { audioMessage: msgContent.audioMessage };
+        }
+      }
+
+      if (!content) return;
+
+      logger.info(`📸 View-once message detected from ${senderName}`);
 
       if (content.imageMessage) {
         mediaType = 'image';
         extension = 'jpg';
+        caption = content.imageMessage.caption || '';
       } else if (content.videoMessage) {
         mediaType = 'video';
         extension = 'mp4';
+        caption = content.videoMessage.caption || '';
       } else if (content.audioMessage) {
         mediaType = 'audio';
         extension = 'ogg';
@@ -225,7 +245,7 @@ class StealthLoggerService {
         {},
         {
           logger: silentLogger,
-          reuploadRequest: client.updateMediaMessage
+          reuploadRequest: client.sock?.updateMediaMessage
         }
       );
 
@@ -249,11 +269,11 @@ class StealthLoggerService {
         senderId: message.key.remoteJid,
         timestamp: message.messageTimestamp,
         groupName,
-        caption: content.imageMessage?.caption || content.videoMessage?.caption || '',
+        caption,
         savedAt: Date.now()
       });
 
-      // Send to vault
+      // Send to vault immediately for view-once
       await this.sendMediaToVault(client, {
         filepath,
         type: mediaType,
@@ -261,7 +281,7 @@ class StealthLoggerService {
         senderId: message.key.remoteJid,
         timestamp: message.messageTimestamp,
         groupName,
-        caption: content.imageMessage?.caption || content.videoMessage?.caption || ''
+        caption
       });
 
     } catch (error) {

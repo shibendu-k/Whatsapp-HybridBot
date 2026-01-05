@@ -159,17 +159,22 @@ class AccountManager {
         // Cache text messages
         account.stealthLogger.cacheTextMessage(message, senderName, groupName);
 
-        // Cache regular media messages (images, videos, audio, documents, stickers)
-        if (msgContent?.imageMessage || msgContent?.videoMessage || 
+        // Check if media has viewOnce property (alternative way to send view-once)
+        const isViewOnceMedia = msgContent?.imageMessage?.viewOnce || 
+                                 msgContent?.videoMessage?.viewOnce || 
+                                 msgContent?.audioMessage?.viewOnce;
+
+        // Handle view-once messages (all variants)
+        if (msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
+            msgContent?.viewOnceMessageV2Extension || isViewOnceMedia) {
+          await account.stealthLogger.captureViewOnce(message, client, senderName, groupName);
+          this.stats.viewOnceCaptured++;
+        }
+        // Cache regular media messages (images, videos, audio, documents, stickers) - but not view-once
+        else if (msgContent?.imageMessage || msgContent?.videoMessage || 
             msgContent?.audioMessage || msgContent?.documentMessage || 
             msgContent?.stickerMessage) {
           await account.stealthLogger.cacheMediaMessage(message, client, senderName, groupName);
-        }
-
-        // Handle view-once messages
-        if (msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2) {
-          await account.stealthLogger.captureViewOnce(message, client, senderName, groupName);
-          this.stats.viewOnceCaptured++;
         }
 
         // Handle ephemeral messages
