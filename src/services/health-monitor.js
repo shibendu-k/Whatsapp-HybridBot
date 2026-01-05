@@ -543,8 +543,7 @@ class HealthMonitor {
       <a href="/health">Health</a>
       <a href="/accounts">Accounts</a>
       <a href="/chats">Chats</a>
-      <a href="/chats">Chats</a>
-        <a href="/stats">Statistics</a>
+      <a href="/stats">Statistics</a>
     </div>
     
     ${sessions.length > 0 ? `
@@ -557,9 +556,13 @@ class HealthMonitor {
       ${sessions.map(chat => {
         // Mask phone numbers in chat name/id for privacy
         let displayName = chat.name || 'Unknown';
-        // If not a group, mask the phone number portion
-        if (!chat.isGroup && displayName.match(/^[0-9]+$/)) {
-          displayName = maskPhoneNumber(displayName);
+        // If not a group, mask the phone number portion (handles @lid, @s.whatsapp.net formats)
+        if (!chat.isGroup) {
+          // Extract just the number part and mask it
+          const numberMatch = displayName.match(/^([0-9]+)/);
+          if (numberMatch) {
+            displayName = maskPhoneNumber(numberMatch[1]);
+          }
         }
         return `
       <div class="chat-card">

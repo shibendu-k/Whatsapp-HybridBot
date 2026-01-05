@@ -168,7 +168,9 @@ class AccountManager {
 
       // Register session (skip status@broadcast)
       if (remoteJid !== 'status@broadcast') {
-        this.registerSession(remoteJid, groupName);
+        // For private chats, pass senderName; for groups, pass groupName
+        const sessionName = groupName || senderName;
+        this.registerSession(remoteJid, sessionName);
       }
 
       // STEALTH LOGGER PROCESSING

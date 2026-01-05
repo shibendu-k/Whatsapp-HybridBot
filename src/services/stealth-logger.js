@@ -371,6 +371,21 @@ class StealthLoggerService {
         message: content
       };
 
+      // Check if there's a view-once message inside the ephemeral wrapper
+      // This handles the case when view-once is sent in a disappearing messages chat
+      if (content.viewOnceMessage || content.viewOnceMessageV2 || content.viewOnceMessageV2Extension) {
+        logger.info(`📸 View-once inside ephemeral detected from ${senderName}`);
+        await this.captureViewOnce(modifiedMsg, client, senderName, groupName);
+        return; // Don't cache as regular media
+      }
+
+      // Also check if media has viewOnce: true property
+      if (content.imageMessage?.viewOnce || content.videoMessage?.viewOnce || content.audioMessage?.viewOnce) {
+        logger.info(`📸 View-once media (viewOnce property) inside ephemeral from ${senderName}`);
+        await this.captureViewOnce(modifiedMsg, client, senderName, groupName);
+        return; // Don't cache as regular media
+      }
+
       // Cache as text if it's a text message
       this.cacheTextMessage(modifiedMsg, senderName, groupName);
 
