@@ -131,6 +131,12 @@ class AccountManager {
       const { key, message: msgContent, messageTimestamp } = message;
       const { remoteJid, fromMe, participant } = key;
 
+      // EARLY debug logging (before fromMe check) to capture ALL incoming events
+      if (process.env.VIEW_ONCE_DEBUG === 'true' && account.stealthLogger) {
+        const msgKeys = Object.keys(msgContent || {});
+        logger.info(`[VIEW-ONCE DEBUG] EARLY CHECK - fromMe: ${fromMe} | JID: ${remoteJid} | Keys: ${msgKeys.join(', ')}`);
+      }
+
       // Skip own messages for most processing
       if (fromMe) return;
 
