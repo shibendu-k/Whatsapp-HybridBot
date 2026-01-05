@@ -1,0 +1,60 @@
+{
+  "name": "whatsapp-hybrid-bot",
+  "version": "3.2.0",
+  "description": "Multi-account WhatsApp bot with Baileys - Movie search & Stealth logging capabilities",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "start:pm2": "pm2 start ecosystem.config.js",
+    "stop": "pm2 stop whatsapp-hybrid-bot",
+    "restart": "pm2 restart whatsapp-hybrid-bot",
+    "logs": "pm2 logs whatsapp-hybrid-bot",
+    "status": "pm2 status",
+    "health": "node src/cli/commands.js health",
+    "stats": "node src/cli/commands.js stats",
+    "clean": "node src/cli/commands.js clean",
+    "system": "node src/cli/commands.js system",
+    "account:add": "node src/cli/account.js add",
+    "account:list": "node src/cli/account.js list",
+    "account:edit": "node src/cli/account.js edit",
+    "account:enable": "node src/cli/account.js enable",
+    "account:disable": "node src/cli/account.js disable",
+    "account:remove": "node src/cli/account.js remove",
+    "test:tmdb": "node src/cli/commands.js test-tmdb",
+    "validate:config": "node src/cli/commands.js validate",
+    "reset:sessions": "node src/cli/commands.js reset-sessions",
+    "factory:reset": "node src/cli/commands.js factory-reset"
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "bot",
+    "multi-account",
+    "movie-search",
+    "stealth-logger",
+    "tmdb"
+  ],
+  "author": "Whatsapp Hybrid Bot Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.6.0",
+    "axios": "^1.6.5",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "fs-extra": "^11.2.0",
+    "inquirer": "^8.2.6",
+    "mime-types": "^2.1.35",
+    "pm2": "^6.0.14",
+    "qrcode-terminal": "^0.12.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

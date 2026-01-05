@@ -1,0 +1,22 @@
+{
+  "app": {
+    "name": "WhatsApp Hybrid Bot",
+    "version": "3.2.0",
+    "timezone": "Asia/Kolkata"
+  },
+  "performance": {
+    "maxAccounts": 10,
+    "memoryPerAccount": 90,
+    "cleanupInterval": 21600000
+  },
+  "antiSan": {
+    "minDelay": 3000,
+    "maxDelay": 7000,
+    "ipv4Preference": true
+  },
+  "cache": {
+    "textMessageExpiry": 10800000,
+    "userSearchExpiry": 600000,
+    "tmdbResultExpiry": 3600000
+  }
+}
