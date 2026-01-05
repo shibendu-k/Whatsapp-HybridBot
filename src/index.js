@@ -1,8 +1,19 @@
 require('dotenv').config();
+const dns = require('dns');
 const logger = require('./utils/logger');
 const { validateEnv, ensureDirectories, ensureAccountsConfig } = require('./utils/validators');
 const AccountManager = require('./account-manager');
 const HealthMonitor = require('./services/health-monitor');
+
+// Set IPv4 first for better network performance
+if (dns.setDefaultResultOrder) {
+  try {
+    dns.setDefaultResultOrder('ipv4first');
+    logger.debug('DNS: IPv4 preference set');
+  } catch (error) {
+    logger.debug('DNS: Could not set IPv4 preference');
+  }
+}
 
 class WhatsAppHybridBot {
   constructor() {
@@ -67,6 +78,12 @@ class WhatsAppHybridBot {
       logger.info('Press Ctrl+C to stop');
       logger.info('');
 
+      // Start periodic stats logging (every 6 hours)
+      this.statsInterval = setInterval(() => {
+        const stats = this.accountManager.getStats();
+        logger.info(`📊 Stats: Movies=${stats.moviesSearched}, Deleted=${stats.deletedRecovered}, ViewOnce=${stats.viewOnceCaptured}, StatusAutoDelete=${stats.statusAutoDeleted}`);
+      }, 6 * 60 * 60 * 1000);
+
       // Signal PM2 that we're ready
       if (process.send) {
         process.send('ready');
@@ -89,6 +106,11 @@ class WhatsAppHybridBot {
     logger.warn('Shutting down gracefully...');
 
     try {
+      // Clear intervals
+      if (this.statsInterval) {
+        clearInterval(this.statsInterval);
+      }
+
       // Stop health monitor
       if (this.healthMonitor) {
         logger.info('Stopping health monitor...');

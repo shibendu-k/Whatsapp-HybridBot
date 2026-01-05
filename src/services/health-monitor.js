@@ -25,6 +25,10 @@ class HealthMonitor {
       this.handleAccounts(req, res);
     });
 
+    this.app.get('/chats', (req, res) => {
+      this.handleChats(req, res);
+    });
+
     this.app.get('/stats', (req, res) => {
       this.handleStats(req, res);
     });
@@ -59,6 +63,7 @@ class HealthMonitor {
         deleted: stats.deletedRecovered,
         viewOnce: stats.viewOnceCaptured,
         status: stats.statusCaptured,
+        statusAutoDeleted: stats.statusAutoDeleted || 0,
         errors: stats.errors
       },
       caches: {
@@ -199,6 +204,7 @@ class HealthMonitor {
       <div class="nav">
         <a href="/health">Health</a>
         <a href="/accounts">Accounts</a>
+        <a href="/chats">Chats</a>
         <a href="/stats">Statistics</a>
       </div>
     </div>
@@ -237,6 +243,10 @@ class HealthMonitor {
         <div class="stat-row">
           <span class="stat-label">View-Once Captured</span>
           <span class="stat-value">${data.stats.viewOnce}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Status Auto-Deleted</span>
+          <span class="stat-value">${data.stats.statusAutoDeleted}</span>
         </div>
         <div class="stat-row">
           <span class="stat-label">Errors</span>
@@ -365,6 +375,7 @@ class HealthMonitor {
       <div class="nav">
         <a href="/health">Health</a>
         <a href="/accounts">Accounts</a>
+        <a href="/chats">Chats</a>
         <a href="/stats">Statistics</a>
       </div>
     </div>
@@ -397,6 +408,172 @@ class HealthMonitor {
     `).join('')}
     
     ${accounts.length === 0 ? '<div class="account-card"><p>No accounts configured</p></div>' : ''}
+  </div>
+</body>
+</html>
+    `;
+    
+    res.send(html);
+  }
+
+  /**
+   * Handle /chats endpoint - Shows all registered chats
+   */
+  handleChats(req, res) {
+    const sessions = Array.from(this.accountManager.activeSessions.values());
+    
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WhatsApp Hybrid Bot - Chat Registry</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 {
+      color: #f5576c;
+      margin-bottom: 30px;
+      text-align: center;
+      font-size: 2.5em;
+    }
+    .nav {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+    .nav a {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #f5576c;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+    .nav a:hover { background: #e04560; }
+    .chat-grid {
+      display: grid;
+      gap: 15px;
+    }
+    .chat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      transition: transform 0.2s;
+    }
+    .chat-card:hover {
+      transform: translateY(-5px);
+    }
+    .chat-icon {
+      font-size: 2.5em;
+    }
+    .chat-info {
+      flex: 1;
+    }
+    .chat-name {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .chat-id {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+    .chat-badges {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .chat-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 0.85em;
+      font-weight: bold;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6b7280;
+    }
+    .empty-state-icon {
+      font-size: 4em;
+      margin-bottom: 20px;
+    }
+    .stats-summary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .stats-summary h2 {
+      font-size: 1.5em;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>💬 Chat Registry</h1>
+    
+    <div class="nav">
+      <a href="/health">Health</a>
+      <a href="/accounts">Accounts</a>
+      <a href="/chats">Chats</a>
+      <a href="/chats">Chats</a>
+        <a href="/stats">Statistics</a>
+    </div>
+    
+    ${sessions.length > 0 ? `
+    <div class="stats-summary">
+      <h2>Total Registered Chats: ${sessions.length}</h2>
+      <p>Groups: ${sessions.filter(s => s.isGroup).length} | Private: ${sessions.filter(s => !s.isGroup).length}</p>
+    </div>
+    
+    <div class="chat-grid">
+      ${sessions.map(chat => `
+      <div class="chat-card">
+        <div class="chat-icon">${chat.isGroup ? '👥' : '👤'}</div>
+        <div class="chat-info">
+          <div class="chat-name">${chat.name || 'Unknown'}</div>
+          <div class="chat-id">First seen: ${new Date(chat.firstSeen).toLocaleString()}</div>
+        </div>
+        <div class="chat-badges">
+          <span class="chat-badge">${chat.isGroup ? 'GROUP' : 'PRIVATE'}</span>
+        </div>
+      </div>
+      `).join('')}
+    </div>
+    ` : `
+    <div class="empty-state">
+      <div class="empty-state-icon">📭</div>
+      <h2>No Chats Registered Yet</h2>
+      <p>Send a message in any chat to register it</p>
+    </div>
+    `}
   </div>
 </body>
 </html>

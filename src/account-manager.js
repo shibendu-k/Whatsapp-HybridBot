@@ -19,6 +19,7 @@ class AccountManager {
       deletedRecovered: 0,
       viewOnceCaptured: 0,
       statusCaptured: 0,
+      statusAutoDeleted: 0,
       errors: 0
     };
     this.activeSessions = new Map(); // Track all active chats
