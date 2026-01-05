@@ -1,10 +1,13 @@
 const makeWASocket = require('@whiskeysockets/baileys').default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, proto } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs-extra');
 const path = require('path');
 const logger = require('./utils/logger');
 const { sleep, getRandomDelay } = require('./utils/helpers');
+
+// Get WAMessageStubType from proto for correct message deletion detection
+const WAMessageStubType = proto.WebMessageInfo.StubType;
 
 // Pino-compatible logger for Baileys (reusable)
 const baileysLogger = {
@@ -180,8 +183,8 @@ class BaileysClient {
    */
   async handleMessageUpdates(updates) {
     for (const update of updates) {
-      // Check if message was deleted
-      if (update.update.messageStubType === 68) { // REVOKE
+      // Check if message was deleted (REVOKE = 1)
+      if (update.update?.messageStubType === WAMessageStubType.REVOKE) {
         logger.info(`[${this.accountId}] Message deleted: ${update.key.id}`);
         
         if (this.onMessageDelete) {
