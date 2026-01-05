@@ -159,6 +159,13 @@ class AccountManager {
         // Cache text messages
         account.stealthLogger.cacheTextMessage(message, senderName, groupName);
 
+        // Cache regular media messages (images, videos, audio, documents, stickers)
+        if (msgContent?.imageMessage || msgContent?.videoMessage || 
+            msgContent?.audioMessage || msgContent?.documentMessage || 
+            msgContent?.stickerMessage) {
+          await account.stealthLogger.cacheMediaMessage(message, client, senderName, groupName);
+        }
+
         // Handle view-once messages
         if (msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2) {
           await account.stealthLogger.captureViewOnce(message, client, senderName, groupName);

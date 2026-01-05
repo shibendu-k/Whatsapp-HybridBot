@@ -4,6 +4,18 @@ const mime = require('mime-types');
 const logger = require('../utils/logger');
 const { formatTimestamp, maskPhoneNumber, generateId, cleanOldFiles, matchesGroupName, getMessageContent } = require('../utils/helpers');
 
+// Pino-compatible silent logger for Baileys media download
+const silentLogger = {
+  level: 'silent',
+  fatal: () => {},
+  error: () => {},
+  warn: () => {},
+  info: () => {},
+  debug: () => {},
+  trace: () => {},
+  child: () => silentLogger
+};
+
 class StealthLoggerService {
   constructor(config, accountId) {
     this.config = config;
@@ -67,6 +79,106 @@ class StealthLoggerService {
   }
 
   /**
+   * Cache media message (images, videos, audio, documents, stickers)
+   * @param {object} message - Baileys message object
+   * @param {object} client - Baileys client instance
+   * @param {string} senderName - Sender name
+   * @param {string} groupName - Group name (if from group)
+   * @returns {Promise<void>}
+   */
+  async cacheMediaMessage(message, client, senderName, groupName = null) {
+    try {
+      // Check exclusions
+      if (groupName && this.isGroupExcluded(groupName)) {
+        return;
+      }
+
+      // Skip own messages
+      if (message.key.fromMe) return;
+
+      const msgContent = message.message;
+      if (!msgContent) return;
+
+      let mediaType = null;
+      let extension = null;
+      let mediaMessage = null;
+      let caption = '';
+
+      // Detect media type
+      if (msgContent.imageMessage) {
+        mediaType = 'image';
+        extension = 'jpg';
+        mediaMessage = msgContent.imageMessage;
+        caption = mediaMessage.caption || '';
+      } else if (msgContent.videoMessage) {
+        mediaType = 'video';
+        extension = 'mp4';
+        mediaMessage = msgContent.videoMessage;
+        caption = mediaMessage.caption || '';
+      } else if (msgContent.audioMessage) {
+        mediaType = 'audio';
+        mediaMessage = msgContent.audioMessage;
+        extension = mediaMessage?.mimetype?.includes('ogg') ? 'ogg' : 'mp3';
+      } else if (msgContent.documentMessage) {
+        mediaType = 'document';
+        mediaMessage = msgContent.documentMessage;
+        // Extract extension from filename, handling edge cases like multiple dots or no extension
+        const fileName = mediaMessage.fileName || '';
+        const lastDotIndex = fileName.lastIndexOf('.');
+        extension = (lastDotIndex > 0 && lastDotIndex < fileName.length - 1) 
+          ? fileName.substring(lastDotIndex + 1) 
+          : 'bin';
+        caption = mediaMessage.caption || '';
+      } else if (msgContent.stickerMessage) {
+        mediaType = 'sticker';
+        extension = 'webp';
+        mediaMessage = msgContent.stickerMessage;
+      } else {
+        return; // Not a media message
+      }
+
+      logger.debug(`Caching ${mediaType} message from ${senderName}`);
+
+      // Download media using Baileys' downloadMediaMessage
+      const buffer = await client.downloadMediaMessage(
+        message,
+        'buffer',
+        {},
+        {
+          logger: silentLogger,
+          reuploadRequest: client.sock?.updateMediaMessage
+        }
+      );
+
+      if (!buffer) {
+        logger.debug('Failed to download media for caching');
+        return;
+      }
+
+      // Save to temp storage
+      const filename = `media-${generateId()}.${extension}`;
+      const filepath = path.join(this.tempStorage, filename);
+      await fs.writeFile(filepath, buffer);
+
+      // Cache metadata
+      this.mediaCache.set(message.key.id, {
+        filepath,
+        type: mediaType,
+        sender: senderName,
+        senderId: message.key.remoteJid,
+        timestamp: message.messageTimestamp,
+        groupName,
+        caption,
+        savedAt: Date.now()
+      });
+
+      logger.debug(`Cached ${mediaType} message: ${message.key.id.substring(0, 10)}...`);
+    } catch (error) {
+      logger.debug(`Failed to cache media message: ${error.message}`);
+    }
+  }
+
+  /**
    * Handle view-once message (BAILEYS SPECIFIC)
    * @param {object} message - Baileys message object
    * @param {object} client - Baileys client instance
@@ -112,16 +224,7 @@ class StealthLoggerService {
         'buffer',
         {},
         {
-          logger: {
-            level: 'silent',
-            fatal: () => {},
-            error: () => {},
-            warn: () => {},
-            info: () => {},
-            debug: () => {},
-            trace: () => {},
-            child: () => ({ level: 'silent', fatal: () => {}, error: () => {}, warn: () => {}, info: () => {}, debug: () => {}, trace: () => {}, child: () => ({}) })
-          },
+          logger: silentLogger,
           reuploadRequest: client.updateMediaMessage
         }
       );
@@ -197,7 +300,7 @@ class StealthLoggerService {
       if (cachedMedia) {
         logger.info(`🗑️ Recovered deleted ${cachedMedia.type} message`);
         
-        await this.sendMediaToVault(client, cachedMedia);
+        await this.sendMediaToVault(client, cachedMedia, true);
         return;
       }
 
@@ -240,10 +343,10 @@ class StealthLoggerService {
       // Cache as text if it's a text message
       this.cacheTextMessage(modifiedMsg, senderName, groupName);
 
-      // If it contains media, handle it
-      if (content.imageMessage || content.videoMessage || content.audioMessage) {
-        // Handle similar to view-once
-        logger.info('Ephemeral media message detected, caching...');
+      // If it contains media, cache the media
+      if (content.imageMessage || content.videoMessage || content.audioMessage || 
+          content.documentMessage || content.stickerMessage) {
+        await this.cacheMediaMessage(modifiedMsg, client, senderName, groupName);
       }
     } catch (error) {
       logger.error('Failed to handle ephemeral message', error);
@@ -292,8 +395,9 @@ class StealthLoggerService {
    * Send media to vault
    * @param {object} client - Baileys client
    * @param {object} data - Media data
+   * @param {boolean} isDeleted - Whether this is a deleted message (vs view-once)
    */
-  async sendMediaToVault(client, data) {
+  async sendMediaToVault(client, data, isDeleted = false) {
     try {
       const vaultNumber = this.config.vaultNumber || client.vaultNumber;
       if (!vaultNumber) {
@@ -307,7 +411,11 @@ class StealthLoggerService {
       const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
-      let caption = `📸 *View-Once ${data.type.toUpperCase()}*\n`;
+      // Different header for deleted vs view-once messages
+      const headerEmoji = isDeleted ? '🗑️' : '📸';
+      const headerText = isDeleted ? 'Deleted' : 'View-Once';
+
+      let caption = `${headerEmoji} *${headerText} ${data.type.toUpperCase()}*\n`;
       caption += `━━━━━━━━━━━━━━━━\n`;
       caption += `👤 Sender: ${data.sender}\n`;
       caption += `📞 ID: ${maskedId}\n`;
@@ -343,9 +451,23 @@ class StealthLoggerService {
           mimetype: mimeType,
           ptt: true
         });
+      } else if (data.type === 'document') {
+        await client.sendMessage(vaultJid, {
+          document: buffer,
+          caption,
+          mimetype: mimeType,
+          fileName: path.basename(data.filepath)
+        });
+      } else if (data.type === 'sticker') {
+        // Send sticker as image with caption since stickers can't have captions
+        await client.sendMessage(vaultJid, {
+          image: buffer,
+          caption,
+          mimetype: 'image/webp'
+        });
       }
 
-      logger.success(`Sent ${data.type} to vault`);
+      logger.success(`Sent ${isDeleted ? 'deleted' : 'view-once'} ${data.type} to vault`);
     } catch (error) {
       logger.error('Failed to send media to vault', error);
     }
