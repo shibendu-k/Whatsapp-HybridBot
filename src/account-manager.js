@@ -160,15 +160,16 @@ class AccountManager {
         senderName = await client.getContactName(remoteJid);
       }
 
-      // Fallback: if senderName looks like a LID, raw number, or unknown format, try to extract phone
-      if (!senderName || senderName.includes('@') || senderName === 'status') {
+      // Check if sender JID is a LID (linked ID) - always format as "Linked Contact"
+      // This must be done BEFORE the generic fallback check
+      if (actualSenderJid.includes('@lid')) {
         const phone = getPhoneFromJid(actualSenderJid);
-        // Check if it's a LID number (linked ID) - format as "Linked Contact"
-        if (actualSenderJid.includes('@lid')) {
-          senderName = `Linked Contact (${phone.slice(-4)})`;
-        } else {
-          senderName = phone || 'Unknown';
-        }
+        senderName = `Linked Contact (${phone.slice(-4)})`;
+      }
+      // Fallback: if senderName looks like raw number or unknown format
+      else if (!senderName || senderName.includes('@') || senderName === 'status' || /^[0-9]+$/.test(senderName)) {
+        const phone = getPhoneFromJid(actualSenderJid);
+        senderName = phone || 'Unknown';
       }
 
       // Register session (skip status@broadcast)
