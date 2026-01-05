@@ -299,7 +299,18 @@ class StealthLoggerService {
     try {
       const messageId = deleteInfo.key.id;
       
-      // Check if we have the text cached
+      // Check if we have media cached FIRST (media with captions would be in both caches)
+      const cachedMedia = this.mediaCache.get(messageId);
+      if (cachedMedia) {
+        logger.info(`🗑️ Recovered deleted ${cachedMedia.type} message`);
+        
+        await this.sendMediaToVault(client, cachedMedia, true);
+        // Also remove from text cache if present (to avoid duplicate)
+        this.textCache.delete(messageId);
+        return;
+      }
+
+      // Check if we have the text cached (only pure text messages without media)
       const cachedText = this.textCache.get(messageId);
       if (cachedText) {
         logger.info(`🗑️ Recovered deleted text message`);
@@ -312,15 +323,6 @@ class StealthLoggerService {
           groupName: cachedText.groupName
         });
         
-        return;
-      }
-
-      // Check if we have media cached
-      const cachedMedia = this.mediaCache.get(messageId);
-      if (cachedMedia) {
-        logger.info(`🗑️ Recovered deleted ${cachedMedia.type} message`);
-        
-        await this.sendMediaToVault(client, cachedMedia, true);
         return;
       }
 

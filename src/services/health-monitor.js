@@ -1,6 +1,6 @@
 const express = require('express');
 const logger = require('../utils/logger');
-const { formatUptime, formatBytes } = require('../utils/helpers');
+const { formatUptime, formatBytes, maskPhoneNumber } = require('../utils/helpers');
 
 class HealthMonitor {
   constructor(accountManager) {
@@ -390,7 +390,7 @@ class HealthMonitor {
         </h3>
         <div class="info-row">
           <span>Phone:</span>
-          <strong>${account.stats.phone}</strong>
+          <strong>${maskPhoneNumber(account.stats.phone)}</strong>
         </div>
         <div class="info-row">
           <span>Movie Bot:</span>

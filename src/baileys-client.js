@@ -4,7 +4,7 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs-extra');
 const path = require('path');
 const logger = require('./utils/logger');
-const { sleep, getRandomDelay } = require('./utils/helpers');
+const { sleep, getRandomDelay, maskPhoneNumber } = require('./utils/helpers');
 
 // Get WAMessageStubType from proto for correct message deletion detection
 const WAMessageStubType = proto.WebMessageInfo.StubType;
@@ -127,7 +127,8 @@ class BaileysClient {
       
       // Get own JID
       this.ownJid = this.sock.user.id;
-      logger.info(`[${this.accountId}] Phone: ${this.sock.user.id.split(':')[0]}`);
+      const phoneNumber = this.sock.user.id.split(':')[0];
+      logger.info(`[${this.accountId}] Phone: ${maskPhoneNumber(phoneNumber)}`);
     }
   }
 
