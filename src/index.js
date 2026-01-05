@@ -1,0 +1,154 @@
+require('dotenv').config();
+const logger = require('./utils/logger');
+const { validateEnv, ensureDirectories, ensureAccountsConfig } = require('./utils/validators');
+const AccountManager = require('./account-manager');
+const HealthMonitor = require('./services/health-monitor');
+
+class WhatsAppHybridBot {
+  constructor() {
+    this.accountManager = null;
+    this.healthMonitor = null;
+    this.isShuttingDown = false;
+  }
+
+  /**
+   * Initialize the bot
+   */
+  async initialize() {
+    try {
+      logger.system('╔════════════════════════════════════════╗');
+      logger.system('║  WhatsApp Hybrid Bot v3.2 - Baileys  ║');
+      logger.system('╚════════════════════════════════════════╝');
+      logger.info('');
+
+      // Validate environment
+      logger.info('Validating environment...');
+      const envValidation = validateEnv();
+      
+      if (!envValidation.valid) {
+        logger.error('Environment validation failed:');
+        envValidation.errors.forEach(error => logger.error(`  - ${error}`));
+        process.exit(1);
+      }
+
+      if (envValidation.warnings.length > 0) {
+        envValidation.warnings.forEach(warning => logger.warn(warning));
+      }
+
+      logger.success('Environment validated');
+
+      // Ensure directories exist
+      logger.info('Setting up directories...');
+      await ensureDirectories();
+      await ensureAccountsConfig();
+
+      // Initialize account manager
+      logger.info('Initializing account manager...');
+      this.accountManager = new AccountManager();
+      
+      // Start all accounts
+      await this.accountManager.startAll();
+
+      // Start health monitor if enabled
+      if (process.env.ENABLE_HEALTH_CHECK !== 'false') {
+        logger.info('Starting health monitor...');
+        this.healthMonitor = new HealthMonitor(this.accountManager);
+        await this.healthMonitor.start();
+      }
+
+      logger.success('');
+      logger.success('✅ WhatsApp Hybrid Bot is running!');
+      logger.info('');
+      
+      if (this.healthMonitor) {
+        logger.info(`📊 Health Dashboard: http://localhost:${process.env.HEALTH_CHECK_PORT || 8080}/health`);
+      }
+      
+      logger.info('Press Ctrl+C to stop');
+      logger.info('');
+
+      // Signal PM2 that we're ready
+      if (process.send) {
+        process.send('ready');
+      }
+
+    } catch (error) {
+      logger.error('Initialization failed', error);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * Graceful shutdown
+   */
+  async shutdown() {
+    if (this.isShuttingDown) return;
+    this.isShuttingDown = true;
+
+    logger.info('');
+    logger.warn('Shutting down gracefully...');
+
+    try {
+      // Stop health monitor
+      if (this.healthMonitor) {
+        logger.info('Stopping health monitor...');
+        await this.healthMonitor.stop();
+      }
+
+      // Stop all accounts
+      if (this.accountManager) {
+        logger.info('Stopping all accounts...');
+        await this.accountManager.stopAll();
+      }
+
+      logger.success('Shutdown complete');
+      process.exit(0);
+    } catch (error) {
+      logger.error('Error during shutdown', error);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * Setup signal handlers
+   */
+  setupSignalHandlers() {
+    process.on('SIGINT', () => {
+      logger.warn('\nReceived SIGINT signal');
+      this.shutdown();
+    });
+
+    process.on('SIGTERM', () => {
+      logger.warn('\nReceived SIGTERM signal');
+      this.shutdown();
+    });
+
+    process.on('uncaughtException', (error) => {
+      logger.error('Uncaught exception', error);
+      this.shutdown();
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error('Unhandled rejection', reason);
+    });
+  }
+
+  /**
+   * Start the bot
+   */
+  async start() {
+    this.setupSignalHandlers();
+    await this.initialize();
+  }
+}
+
+// Start the bot if run directly
+if (require.main === module) {
+  const bot = new WhatsAppHybridBot();
+  bot.start().catch((error) => {
+    logger.error('Failed to start bot', error);
+    process.exit(1);
+  });
+}
+
+module.exports = WhatsAppHybridBot;
