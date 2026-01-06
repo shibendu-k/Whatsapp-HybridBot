@@ -5,7 +5,7 @@ const BaileysClient = require('./baileys-client');
 const StealthLoggerService = require('./services/stealth-logger');
 const TMDBService = require('./services/tmdb');
 const CommandRouter = require('./services/command-router');
-const { isGroupChat, getPhoneFromJid, getMessageContent, getSenderName } = require('./utils/helpers');
+const { isGroupChat, getPhoneFromJid, getMessageContent, getSenderName, sleep } = require('./utils/helpers');
 
 class AccountManager {
   constructor() {
@@ -23,6 +23,105 @@ class AccountManager {
       errors: 0
     };
     this.activeSessions = new Map(); // Track all active chats
+    
+    // Bot sleep behavior for anti-detection
+    this.sleepState = {
+      isSleeping: false,
+      lastActivity: Date.now(),
+      sleepTimer: null
+    };
+    
+    // Sleep configuration (can be overridden via env vars)
+    this.sleepConfig = {
+      // How long of inactivity before bot goes to sleep (default: 30 minutes)
+      inactivityTimeout: parseInt(process.env.BOT_SLEEP_TIMEOUT) || 1800000, // 30 minutes
+      // Busy hours when bot should stay awake (24-hour format, IST timezone)
+      busyHoursStart: parseInt(process.env.BOT_BUSY_HOURS_START) || 8, // 8 AM
+      busyHoursEnd: parseInt(process.env.BOT_BUSY_HOURS_END) || 23, // 11 PM
+      // Whether sleep feature is enabled
+      enabled: process.env.BOT_SLEEP_ENABLED !== 'false'
+    };
+    
+    // Start the sleep monitor
+    if (this.sleepConfig.enabled) {
+      this.startSleepMonitor();
+    }
+  }
+
+  /**
+   * Check if current time is within busy hours
+   * @returns {boolean} True if within busy hours
+   */
+  isWithinBusyHours() {
+    const now = new Date();
+    // Convert to IST (UTC+5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+    const hour = istTime.getUTCHours();
+    
+    return hour >= this.sleepConfig.busyHoursStart && hour < this.sleepConfig.busyHoursEnd;
+  }
+
+  /**
+   * Wake up the bot from sleep state
+   */
+  wakeUp() {
+    if (this.sleepState.isSleeping) {
+      this.sleepState.isSleeping = false;
+      logger.info('🌅 Bot waking up from sleep mode');
+    }
+    this.sleepState.lastActivity = Date.now();
+  }
+
+  /**
+   * Put bot into sleep mode
+   */
+  goToSleep() {
+    if (!this.sleepState.isSleeping && !this.isWithinBusyHours()) {
+      this.sleepState.isSleeping = true;
+      logger.info('😴 Bot entering sleep mode (inactive)');
+    }
+  }
+
+  /**
+   * Start the sleep monitor
+   * Checks every minute if bot should sleep or wake up
+   */
+  startSleepMonitor() {
+    // Check every minute
+    setInterval(() => {
+      const now = Date.now();
+      const timeSinceActivity = now - this.sleepState.lastActivity;
+      
+      // If within busy hours, always stay awake
+      if (this.isWithinBusyHours()) {
+        if (this.sleepState.isSleeping) {
+          this.wakeUp();
+          logger.debug('Woke up due to busy hours');
+        }
+        return;
+      }
+      
+      // If inactive for too long and not in busy hours, go to sleep
+      if (timeSinceActivity > this.sleepConfig.inactivityTimeout && !this.sleepState.isSleeping) {
+        this.goToSleep();
+      }
+    }, 60000); // Check every minute
+    
+    logger.debug(`Sleep monitor started. Busy hours: ${this.sleepConfig.busyHoursStart}:00 - ${this.sleepConfig.busyHoursEnd}:00 IST`);
+  }
+
+  /**
+   * Get current sleep status
+   * @returns {object} Sleep state information
+   */
+  getSleepStatus() {
+    return {
+      isSleeping: this.sleepState.isSleeping,
+      lastActivity: this.sleepState.lastActivity,
+      isWithinBusyHours: this.isWithinBusyHours(),
+      config: this.sleepConfig
+    };
   }
 
   /**
@@ -123,6 +222,11 @@ class AccountManager {
   async handleMessage(accountId, message, client) {
     try {
       this.stats.messagesProcessed++;
+      
+      // Wake up bot on message received (anti-detection sleep feature)
+      if (this.sleepConfig.enabled) {
+        this.wakeUp();
+      }
 
       const account = this.accounts.get(accountId);
       if (!account) return;
@@ -513,6 +617,7 @@ class AccountManager {
       ...this.stats,
       activeAccounts: this.accounts.size,
       activeSessions: this.activeSessions.size,
+      sleepStatus: this.getSleepStatus(),
       cacheStats: {
         tmdbCache: this.tmdbService.cache.size,
         userSearches: this.commandRouter.userSearches.size,

@@ -27,6 +27,13 @@ class StealthLoggerService {
     const baseTempStorage = process.env.TEMP_STORAGE_PATH || './temp_storage';
     this.tempStorage = path.join(baseTempStorage, accountId);
     
+    // Cache duration settings (in milliseconds)
+    // Status/Stories: 24 hours (86400000ms)
+    // Regular media: 68 hours (244800000ms) - WhatsApp's "delete for everyone" limit
+    this.STATUS_CACHE_DURATION = config.statusCacheDuration || 86400000; // 24 hours
+    this.MEDIA_CACHE_DURATION = config.mediaCacheDuration || 244800000; // 68 hours
+    this.TEXT_CACHE_DURATION = 10800000; // 3 hours for text messages
+    
     fs.ensureDirSync(this.tempStorage);
     
     // Start cleanup interval
@@ -126,6 +133,9 @@ class StealthLoggerService {
     // Use participant for actual sender in groups/status, fallback to remoteJid
     // Sanitize to clean phone number JID (removes LID device IDs like :5@lid)
     const actualSenderId = this.sanitizeJid(message.key.participant || message.key.remoteJid);
+    
+    // Check if this is a status message (different cache duration)
+    const isStatus = message.key.remoteJid === 'status@broadcast';
 
     this.textCache.set(messageId, {
       text,
@@ -133,6 +143,7 @@ class StealthLoggerService {
       senderId: actualSenderId,
       timestamp: message.messageTimestamp,
       groupName,
+      isStatus,
       cachedAt: Date.now()
     });
 
@@ -216,8 +227,10 @@ class StealthLoggerService {
         return;
       }
 
-      // Save to temp storage
-      const filename = `media-${generateId()}.${extension}`;
+      // Save to temp storage - use different prefix for status files
+      const isStatus = message.key.remoteJid === 'status@broadcast';
+      const filePrefix = isStatus ? 'status' : 'media';
+      const filename = `${filePrefix}-${generateId()}.${extension}`;
       const filepath = path.join(this.tempStorage, filename);
       await fs.writeFile(filepath, buffer);
 
@@ -225,7 +238,7 @@ class StealthLoggerService {
       // Sanitize to clean phone number JID (removes LID device IDs like :5@lid)
       const actualSenderId = this.sanitizeJid(message.key.participant || message.key.remoteJid);
 
-      // Cache metadata
+      // Cache metadata with isStatus flag for different retention periods
       this.mediaCache.set(message.key.id, {
         filepath,
         type: mediaType,
@@ -234,6 +247,7 @@ class StealthLoggerService {
         timestamp: message.messageTimestamp,
         groupName,
         caption,
+        isStatus,
         savedAt: Date.now()
       });
 
@@ -376,7 +390,13 @@ class StealthLoggerService {
       if (cachedMedia) {
         logger.info(`🗑️ Recovered deleted ${cachedMedia.type} message`);
         
-        await this.sendMediaToVault(client, cachedMedia, true);
+        const success = await this.sendMediaToVault(client, cachedMedia, true);
+        
+        // Delete from temp storage and cache after successfully sending to vault
+        if (success) {
+          await this.deleteFromTempStorage(cachedMedia.filepath, messageId);
+        }
+        
         // Also remove from text cache if present (to avoid duplicate)
         this.textCache.delete(messageId);
         return;
@@ -395,12 +415,31 @@ class StealthLoggerService {
           groupName: cachedText.groupName
         });
         
+        // Remove from cache after sending
+        this.textCache.delete(messageId);
         return;
       }
 
       logger.debug(`Message ${messageId.substring(0, 10)}... not in cache`);
     } catch (error) {
       logger.error('Failed to handle deleted message', error);
+    }
+  }
+
+  /**
+   * Delete media file from temp storage and remove from cache
+   * @param {string} filepath - Path to the media file
+   * @param {string} messageId - Message ID for cache removal
+   */
+  async deleteFromTempStorage(filepath, messageId) {
+    try {
+      if (filepath && await fs.pathExists(filepath)) {
+        await fs.remove(filepath);
+        logger.debug(`Deleted temp file: ${path.basename(filepath)}`);
+      }
+      this.mediaCache.delete(messageId);
+    } catch (error) {
+      logger.debug(`Failed to delete temp file: ${error.message}`);
     }
   }
 
@@ -509,13 +548,14 @@ class StealthLoggerService {
    * @param {object} client - Baileys client
    * @param {object} data - Media data
    * @param {boolean} isDeleted - Whether this is a deleted message (vs view-once)
+   * @returns {Promise<boolean>} True if sent successfully
    */
   async sendMediaToVault(client, data, isDeleted = false) {
     try {
       const vaultNumber = this.config.vaultNumber || client.vaultNumber;
       if (!vaultNumber) {
         logger.warn('Vault number not configured, skipping vault send');
-        return;
+        return false;
       }
 
       const vaultJid = vaultNumber.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
@@ -554,7 +594,7 @@ class StealthLoggerService {
       const sock = client.sock;
       if (!sock) {
         logger.error('Client socket not available');
-        return;
+        return false;
       }
 
       if (data.type === 'image') {
@@ -592,8 +632,10 @@ class StealthLoggerService {
       }
 
       logger.success(`Sent ${isDeleted ? 'deleted' : 'view-once'} ${data.type} to vault`);
+      return true;
     } catch (error) {
       logger.error('Failed to send media to vault', error);
+      return false;
     }
   }
 
@@ -611,34 +653,73 @@ class StealthLoggerService {
   }
 
   /**
-   * Cleanup old files and cache
+   * Cleanup old files and cache based on content type
+   * - Status/Stories: 24 hours (STATUS_CACHE_DURATION)
+   * - Regular media: 68 hours (MEDIA_CACHE_DURATION) - WhatsApp's "delete for everyone" limit
+   * - Text cache: 3 hours
    */
   async cleanup() {
     try {
-      // Clean status files (24 hours)
-      await cleanOldFiles(this.tempStorage, this.config.statusCacheDuration);
-      
-      // Clean media files (68 hours)
-      await cleanOldFiles(this.tempStorage, this.config.mediaCacheDuration);
-      
-      // Clean text cache (3 hours)
       const now = Date.now();
-      const textExpiry = 10800000; // 3 hours
+      let statusFilesDeleted = 0;
+      let mediaFilesDeleted = 0;
+      let textEntriesDeleted = 0;
       
-      for (const [key, value] of this.textCache.entries()) {
-        if (now - value.cachedAt > textExpiry) {
-          this.textCache.delete(key);
-        }
-      }
-      
-      // Clean media cache
+      // Clean media cache entries and corresponding files based on type
       for (const [key, value] of this.mediaCache.entries()) {
-        if (now - value.savedAt > this.config.mediaCacheDuration) {
+        const age = now - value.savedAt;
+        const maxAge = value.isStatus ? this.STATUS_CACHE_DURATION : this.MEDIA_CACHE_DURATION;
+        
+        if (age > maxAge) {
+          // Delete the file from temp storage
+          if (value.filepath && await fs.pathExists(value.filepath)) {
+            await fs.remove(value.filepath);
+            if (value.isStatus) {
+              statusFilesDeleted++;
+            } else {
+              mediaFilesDeleted++;
+            }
+          }
+          // Remove from cache
           this.mediaCache.delete(key);
         }
       }
       
-      logger.debug(`Cleanup complete. Text cache: ${this.textCache.size}, Media cache: ${this.mediaCache.size}`);
+      // Also clean any orphaned files in temp storage that aren't tracked in cache
+      // Status files (24 hours) - files starting with 'status-' or 'view-once-'
+      // Regular files (68 hours) - files starting with 'media-'
+      if (await fs.pathExists(this.tempStorage)) {
+        const files = await fs.readdir(this.tempStorage);
+        for (const file of files) {
+          const filePath = path.join(this.tempStorage, file);
+          const stats = await fs.stat(filePath);
+          const fileAge = now - stats.mtimeMs;
+          
+          // Determine if status file (24hr) or regular media (68hr)
+          const isStatusFile = file.startsWith('status-') || file.startsWith('view-once-');
+          const maxAge = isStatusFile ? this.STATUS_CACHE_DURATION : this.MEDIA_CACHE_DURATION;
+          
+          if (fileAge > maxAge) {
+            await fs.remove(filePath);
+            logger.debug(`Cleaned old file: ${file} (age: ${Math.round(fileAge / 3600000)}h)`);
+          }
+        }
+      }
+      
+      // Clean text cache (3 hours)
+      for (const [key, value] of this.textCache.entries()) {
+        const age = now - value.cachedAt;
+        // Use status duration for status text messages, otherwise standard text duration
+        const maxAge = value.isStatus ? this.STATUS_CACHE_DURATION : this.TEXT_CACHE_DURATION;
+        
+        if (age > maxAge) {
+          this.textCache.delete(key);
+          textEntriesDeleted++;
+        }
+      }
+      
+      logger.debug(`Cleanup complete. Deleted: ${statusFilesDeleted} status files, ${mediaFilesDeleted} media files, ${textEntriesDeleted} text entries`);
+      logger.debug(`Remaining cache: Text=${this.textCache.size}, Media=${this.mediaCache.size}`);
     } catch (error) {
       logger.error('Cleanup failed', error);
     }
@@ -646,12 +727,18 @@ class StealthLoggerService {
 
   /**
    * Start periodic cleanup
+   * Runs every hour to check for expired files
    */
   startCleanupInterval() {
-    // Run cleanup every 6 hours
+    // Run cleanup every hour (3600000ms) for more responsive cleanup
     setInterval(() => {
       this.cleanup();
-    }, 21600000);
+    }, 3600000);
+    
+    // Also run initial cleanup after 5 minutes
+    setTimeout(() => {
+      this.cleanup();
+    }, 300000);
   }
 
   /**
