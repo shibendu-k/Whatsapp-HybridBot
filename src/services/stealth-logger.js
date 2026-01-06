@@ -72,6 +72,22 @@ class StealthLoggerService {
   }
 
   /**
+   * Sanitize JID to clean phone number format
+   * Converts any JID (including LID with device IDs like 123456789:5@lid)
+   * to a clean phone number JID (123456789@s.whatsapp.net)
+   * @param {string} jid - The raw JID from Baileys
+   * @returns {string} Clean JID (e.g., 12345@s.whatsapp.net)
+   */
+  sanitizeJid(jid) {
+    if (!jid) return '';
+    // 1. Split by '@' to remove domain (@lid or @s.whatsapp.net)
+    // 2. Split by ':' to remove device ID (:2, :55)
+    // 3. Force add the standard phone domain
+    const number = jid.split('@')[0].split(':')[0];
+    return number + '@s.whatsapp.net';
+  }
+
+  /**
    * Check if group should be excluded from logging
    * @param {string} groupName - Group name
    * @returns {boolean} True if excluded
@@ -108,7 +124,8 @@ class StealthLoggerService {
     }
 
     // Use participant for actual sender in groups/status, fallback to remoteJid
-    const actualSenderId = message.key.participant || message.key.remoteJid;
+    // Sanitize to clean phone number JID (removes LID device IDs like :5@lid)
+    const actualSenderId = this.sanitizeJid(message.key.participant || message.key.remoteJid);
 
     this.textCache.set(messageId, {
       text,
@@ -205,7 +222,8 @@ class StealthLoggerService {
       await fs.writeFile(filepath, buffer);
 
       // Use participant for actual sender in groups/status, fallback to remoteJid
-      const actualSenderId = message.key.participant || message.key.remoteJid;
+      // Sanitize to clean phone number JID (removes LID device IDs like :5@lid)
+      const actualSenderId = this.sanitizeJid(message.key.participant || message.key.remoteJid);
 
       // Cache metadata
       this.mediaCache.set(message.key.id, {
@@ -312,7 +330,8 @@ class StealthLoggerService {
       logger.success(`Saved view-once ${mediaType}: ${filename}`);
 
       // Use participant for actual sender in groups/status, fallback to remoteJid
-      const actualSenderId = message.key.participant || message.key.remoteJid;
+      // Sanitize to clean phone number JID (removes LID device IDs like :5@lid)
+      const actualSenderId = this.sanitizeJid(message.key.participant || message.key.remoteJid);
 
       // Cache metadata
       this.mediaCache.set(message.key.id, {
