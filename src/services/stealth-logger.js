@@ -17,6 +17,7 @@ class StealthLoggerService {
       prefix: this.config.vaultCommands?.prefix || '!vault',
       maxItems: this.config.vaultCommands?.maxItems || 200
     };
+    this.storySelections = new Map();
     
     fs.ensureDirSync(this.tempStorage);
     
@@ -449,6 +450,90 @@ class StealthLoggerService {
   }
 
   /**
+   * Remember story selection options for a chat
+   * @param {string} jid
+   * @param {Array} items
+   */
+  setStorySelection(jid, items) {
+    this.storySelections.set(jid, {
+      items,
+      storedAt: Date.now()
+    });
+  }
+
+  /**
+   * Get pending story selection for a chat
+   * @param {string} jid
+   * @returns {object|null}
+   */
+  getStorySelection(jid) {
+    const selection = this.storySelections.get(jid);
+    if (!selection) return null;
+    if (Date.now() - selection.storedAt > 600000) { // 10 minutes
+      this.storySelections.delete(jid);
+      return null;
+    }
+    return selection;
+  }
+
+  /**
+   * Send a vault record to a chat
+   * @param {object} record
+   * @param {string} targetJid
+   * @param {object} client
+   */
+  async sendVaultRecord(record, targetJid, client) {
+    const buffer = await fs.readFile(record.filepath);
+    const mimeType = mime.lookup(record.filepath) || 'application/octet-stream';
+    const formattedTime = formatTimestamp(record.timestamp);
+    const maskedId = record.senderId ? maskPhoneNumber(getPhoneFromJid(record.senderId)) : '';
+    
+    let caption = `🗂️ Saved Story\n`;
+    caption += `👤 Sender: ${record.sender || 'Unknown'}\n`;
+    
+    if (maskedId) {
+      caption += `📞 ID: ${maskedId}\n`;
+    }
+    
+    caption += `⏰ Time: ${formattedTime}\n`;
+    
+    if (record.groupName) {
+      caption += `👥 Group: ${record.groupName}\n`;
+    }
+    
+    if (record.caption) {
+      caption += `\n💬 Caption: ${record.caption}`;
+    }
+    
+    caption += `\n🆔 Vault ID: ${record.vaultId}`;
+    
+    if (record.type === 'image') {
+      await client.sendMessage(targetJid, {
+        image: buffer,
+        caption,
+        mimetype: mimeType
+      });
+    } else if (record.type === 'video') {
+      await client.sendMessage(targetJid, {
+        video: buffer,
+        caption,
+        mimetype: mimeType
+      });
+    } else if (record.type === 'audio') {
+      await client.sendMessage(targetJid, {
+        audio: buffer,
+        mimetype: mimeType,
+        ptt: true
+      });
+    } else {
+      await client.sendMessage(
+        targetJid,
+        `⚠️ Unable to resend saved story for ID ${record.vaultId} (unsupported type: ${record.type || 'unknown'}).\n\n${caption}`
+      );
+    }
+  }
+
+  /**
    * Handle vault retrieval commands
    * @param {string} text - Message text
    * @param {object} message - Baileys message
@@ -460,13 +545,77 @@ class StealthLoggerService {
     
     const normalized = text.trim();
     const prefix = (this.vaultCommands.prefix || '!vault').toLowerCase();
+    const storyPrefix = '!story';
+    const targetJid = message.key.remoteJid;
+
+    // Handle story selection replies (numbers or "all")
+    const pendingSelection = this.getStorySelection(targetJid);
+    if (pendingSelection && (/^[0-9]+$/i.test(normalized) || normalized.toLowerCase() === 'all')) {
+      if (normalized.toLowerCase() === 'all') {
+        for (const item of pendingSelection.items) {
+          await this.sendVaultRecord(item, targetJid, client);
+        }
+        this.storySelections.delete(targetJid);
+        return true;
+      }
+      
+      const idx = parseInt(normalized, 10) - 1;
+      if (idx >= 0 && idx < pendingSelection.items.length) {
+        await this.sendVaultRecord(pendingSelection.items[idx], targetJid, client);
+        this.storySelections.delete(targetJid);
+        return true;
+      }
+    }
+    
+    // Handle story command
+    if (normalized.toLowerCase().startsWith(storyPrefix)) {
+      const term = normalized.slice(storyPrefix.length).trim();
+      if (!term) {
+        await client.sendMessage(targetJid, '❌ Please provide a name/number/tag. Example: !story Alice or !story 9876');
+        return true;
+      }
+      
+      const items = await this.readVaultIndex();
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const termLower = term.toLowerCase();
+      const todayMatches = items.filter(item => {
+        const tsMs = item.timestamp ? item.timestamp * 1000 : item.savedAt || 0;
+        if (tsMs < startOfDay.getTime()) return false;
+        
+        const sender = (item.sender || '').toLowerCase();
+        const phone = (item.senderId || '').replace(/[^0-9]/g, '');
+        return sender.includes(termLower) || phone.includes(term.replace(/[^0-9]/g, ''));
+      });
+      
+      if (todayMatches.length === 0) {
+        await client.sendMessage(targetJid, `❌ No stories found today for "${term}".`);
+        return true;
+      }
+      
+      if (todayMatches.length === 1) {
+        await this.sendVaultRecord(todayMatches[0], targetJid, client);
+        return true;
+      }
+      
+      // Multiple matches: prompt selection
+      let response = `📚 Stories from "${term}" today:\n`;
+      todayMatches.forEach((item, index) => {
+        const time = formatTimestamp(item.timestamp);
+        response += `*${index + 1}.* ${item.type.toUpperCase()} at ${time}\n`;
+      });
+      response += `\nReply with a number (1-${todayMatches.length}) or "all" to receive all.`;
+      
+      this.setStorySelection(targetJid, todayMatches);
+      await client.sendMessage(targetJid, response);
+      return true;
+    }
     
     if (!normalized.toLowerCase().startsWith(prefix)) {
       return false;
     }
     
     const args = normalized.slice(prefix.length).trim();
-    const targetJid = message.key.remoteJid;
     
     if (!args) {
       await client.sendMessage(targetJid, `📦 Saved stories\nUse: ${this.vaultCommands.prefix} <vaultId|latest>`);
@@ -482,54 +631,7 @@ class StealthLoggerService {
     }
     
     try {
-      const buffer = await fs.readFile(record.filepath);
-      const mimeType = mime.lookup(record.filepath) || 'application/octet-stream';
-      const formattedTime = formatTimestamp(record.timestamp);
-      const maskedId = record.senderId ? maskPhoneNumber(getPhoneFromJid(record.senderId)) : '';
-      
-      let caption = `🗂️ Saved Story\n`;
-      caption += `👤 Sender: ${record.sender || 'Unknown'}\n`;
-      
-      if (maskedId) {
-        caption += `📞 ID: ${maskedId}\n`;
-      }
-      
-      caption += `⏰ Time: ${formattedTime}\n`;
-      
-      if (record.groupName) {
-        caption += `👥 Group: ${record.groupName}\n`;
-      }
-      
-      if (record.caption) {
-        caption += `\n💬 Caption: ${record.caption}`;
-      }
-      
-      caption += `\n🆔 Vault ID: ${record.vaultId}`;
-      
-      if (record.type === 'image') {
-        await client.sendMessage(targetJid, {
-          image: buffer,
-          caption,
-          mimetype: mimeType
-        });
-      } else if (record.type === 'video') {
-        await client.sendMessage(targetJid, {
-          video: buffer,
-          caption,
-          mimetype: mimeType
-        });
-      } else if (record.type === 'audio') {
-        await client.sendMessage(targetJid, {
-          audio: buffer,
-          mimetype: mimeType,
-          ptt: true
-        });
-      } else {
-        await client.sendMessage(
-          targetJid,
-          `⚠️ Unable to resend saved story for ID ${record.vaultId} (unsupported type: ${record.type || 'unknown'}).\n\n${caption}`
-        );
-      }
+      await this.sendVaultRecord(record, targetJid, client);
     } catch (error) {
       logger.error('Failed to send vault story', error);
       await client.sendMessage(targetJid, '❌ Unable to retrieve the requested story. It may have expired.');

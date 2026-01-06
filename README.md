@@ -103,6 +103,19 @@ Use the vault command to resend captured stories or view-once media that were fo
 !vault latest      # Quickly resend the most recently saved story
 ```
 
+### Same-day story retrieval by person
+
+Use the story command to fetch today's saved stories for a person (matches name or number):
+
+```
+!story Alice        # List today's stories from Alice
+!story 9876         # Match by phone digits
+
+# If multiple stories exist today, reply with:
+1                   # Send a specific story
+all                 # Send all stories from that person today
+```
+
 ### Account Management
 
 ```bash
