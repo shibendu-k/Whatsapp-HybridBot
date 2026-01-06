@@ -462,16 +462,9 @@ class StealthLoggerService {
       const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
-      // Try to get better sender name from registry if current name looks like a fallback
-      let senderDisplayName = data.sender;
-      const registeredName = this.getContactFromRegistry(data.senderId);
-      if (registeredName && !registeredName.includes('@') && registeredName !== 'status') {
-        senderDisplayName = registeredName;
-      }
-      // If still showing raw numbers or LID format, mask it
-      if (/^[0-9]+$/.test(senderDisplayName) || senderDisplayName.startsWith('Linked Contact')) {
-        senderDisplayName = maskPhoneNumber(getPhoneFromJid(data.senderId));
-      }
+      // Use sender name directly - it should be the contact name or raw phone number
+      // The ID field will always be masked
+      const senderDisplayName = data.sender;
 
       let message = `🗑️ *Deleted Text*\n`;
       message += `━━━━━━━━━━━━━━━━\n`;
@@ -512,16 +505,9 @@ class StealthLoggerService {
       const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
-      // Try to get better sender name from registry if current name looks like a fallback
-      let senderDisplayName = data.sender;
-      const registeredName = this.getContactFromRegistry(data.senderId);
-      if (registeredName && !registeredName.includes('@') && registeredName !== 'status') {
-        senderDisplayName = registeredName;
-      }
-      // If still showing raw numbers or LID format, mask it
-      if (/^[0-9]+$/.test(senderDisplayName) || senderDisplayName.startsWith('Linked Contact')) {
-        senderDisplayName = maskPhoneNumber(getPhoneFromJid(data.senderId));
-      }
+      // Use sender name directly - it should be the contact name or raw phone number
+      // The ID field will always be masked
+      const senderDisplayName = data.sender;
 
       // Different header for deleted vs view-once messages
       const headerEmoji = isDeleted ? '🗑️' : '📸';

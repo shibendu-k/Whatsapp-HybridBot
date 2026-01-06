@@ -164,11 +164,9 @@ class AccountManager {
             viewOnceSenderName = await client.getContactName(remoteJid);
           }
           
-          // Handle LID format
-          if (viewOnceSenderJid.includes('@lid')) {
-            const phone = getPhoneFromJid(viewOnceSenderJid);
-            viewOnceSenderName = `Linked Contact (${phone.slice(-4)})`;
-          } else if (!viewOnceSenderName || viewOnceSenderName.includes('@') || viewOnceSenderName === 'status') {
+          // If we didn't get a good contact name (it's empty, contains @, or is 'status'), 
+          // use the raw phone number. The masking will happen only in vault message's ID field.
+          if (!viewOnceSenderName || viewOnceSenderName.includes('@') || viewOnceSenderName === 'status') {
             const phone = getPhoneFromJid(viewOnceSenderJid);
             viewOnceSenderName = phone || 'Unknown';
           }
@@ -212,14 +210,9 @@ class AccountManager {
         senderName = await client.getContactName(remoteJid);
       }
 
-      // Check if sender JID is a LID (linked ID) - always format as "Linked Contact"
-      // This must be done BEFORE the generic fallback check
-      if (actualSenderJid.includes('@lid')) {
-        const phone = getPhoneFromJid(actualSenderJid);
-        senderName = `Linked Contact (${phone.slice(-4)})`;
-      }
-      // Fallback: if senderName looks like raw number or unknown format
-      else if (!senderName || senderName.includes('@') || senderName === 'status' || /^[0-9]+$/.test(senderName)) {
+      // If we didn't get a good contact name (it's empty, contains @, or is 'status'), 
+      // use the raw phone number. The masking will happen only in vault message's ID field.
+      if (!senderName || senderName.includes('@') || senderName === 'status') {
         const phone = getPhoneFromJid(actualSenderJid);
         senderName = phone || 'Unknown';
       }
@@ -233,9 +226,8 @@ class AccountManager {
 
       // STEALTH LOGGER PROCESSING
       if (account.stealthLogger) {
-        // Register contact in the contact registry for better name resolution
-        // This helps when we need to look up names for deleted messages
-        if (actualSenderJid && senderName && !senderName.startsWith('Linked Contact')) {
+        // Register contact in the contact registry for potential future name lookups
+        if (actualSenderJid && senderName) {
           account.stealthLogger.registerContact(actualSenderJid, senderName);
         }
         
