@@ -215,17 +215,8 @@ class TMDBService {
         const imdbId = externalIds.data.imdb_id;
         const imdbLink = imdbId ? `https://www.imdb.com/title/${imdbId}` : null;
 
-        // Build watch links
-        const watchLinks = [];
-        if (streaming.length > 0) {
-          streaming.forEach(platform => {
-            const platformSlug = platform.toLowerCase().replace(/\s+/g, '-');
-            watchLinks.push({
-              platform,
-              link: `https://www.justwatch.com/in/movie/${movie.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-            });
-          });
-        }
+        // Build watch links - JustWatch aggregates all platforms on one page
+        const justWatchLink = `https://www.justwatch.com/in/movie/${movie.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
         return {
           title: movie.title,
@@ -241,7 +232,7 @@ class TMDBService {
           trailer: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
           streaming: streaming.length > 0 ? streaming : [],
           streamingDetails,
-          watchLinks,
+          justWatchLink,
           collectionInfo,
           imdbLink,
           runtime: movie.runtime || null
@@ -318,16 +309,8 @@ class TMDBService {
         const imdbId = externalIds.data.imdb_id;
         const imdbLink = imdbId ? `https://www.imdb.com/title/${imdbId}` : null;
 
-        // Build watch links
-        const watchLinks = [];
-        if (streaming.length > 0) {
-          streaming.forEach(platform => {
-            watchLinks.push({
-              platform,
-              link: `https://www.justwatch.com/in/tv-show/${series.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-            });
-          });
-        }
+        // Build watch link - JustWatch aggregates all platforms on one page
+        const justWatchLink = `https://www.justwatch.com/in/tv-show/${series.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
         return {
           title: series.name,
@@ -343,7 +326,7 @@ class TMDBService {
           trailer: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
           streaming: streaming.length > 0 ? streaming : [],
           streamingDetails,
-          watchLinks,
+          justWatchLink,
           imdbLink,
           numberOfSeasons: series.number_of_seasons || null,
           numberOfEpisodes: series.number_of_episodes || null,

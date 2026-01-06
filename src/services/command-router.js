@@ -238,17 +238,9 @@ class CommandRouter {
       caption += `📺 *Streaming:* Not available on major platforms\n\n`;
     }
     
-    // Watch links
-    if (details.watchLinks && details.watchLinks.length > 0) {
-      caption += `🔗 *Watch Links:*\n`;
-      const uniquePlatforms = [...new Set(details.watchLinks.map(w => w.platform))];
-      uniquePlatforms.forEach(platform => {
-        const link = details.watchLinks.find(w => w.platform === platform)?.link;
-        if (link) {
-          caption += `   • ${platform}: ${link}\n`;
-        }
-      });
-      caption += `\n`;
+    // JustWatch link (where users can find streaming options)
+    if (details.justWatchLink && details.streaming && details.streaming.length > 0) {
+      caption += `🔗 *Find on JustWatch:*\n${details.justWatchLink}\n\n`;
     }
     
     // IMDb link
