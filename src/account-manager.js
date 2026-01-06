@@ -5,7 +5,7 @@ const BaileysClient = require('./baileys-client');
 const StealthLoggerService = require('./services/stealth-logger');
 const TMDBService = require('./services/tmdb');
 const CommandRouter = require('./services/command-router');
-const { isGroupChat, getPhoneFromJid, getMessageContent } = require('./utils/helpers');
+const { isGroupChat, getPhoneFromJid, getMessageContent, getSenderName, sleep } = require('./utils/helpers');
 
 class AccountManager {
   constructor() {
@@ -20,9 +20,109 @@ class AccountManager {
       viewOnceCaptured: 0,
       statusCaptured: 0,
       statusAutoDeleted: 0,
+      messagesEdited: 0,
       errors: 0
     };
     this.activeSessions = new Map(); // Track all active chats
+    
+    // Bot sleep behavior for anti-detection
+    this.sleepState = {
+      isSleeping: false,
+      lastActivity: Date.now(),
+      sleepTimer: null
+    };
+    
+    // Sleep configuration (can be overridden via env vars)
+    this.sleepConfig = {
+      // How long of inactivity before bot goes to sleep (default: 30 minutes)
+      inactivityTimeout: parseInt(process.env.BOT_SLEEP_TIMEOUT) || 1800000, // 30 minutes
+      // Busy hours when bot should stay awake (24-hour format, IST timezone)
+      busyHoursStart: parseInt(process.env.BOT_BUSY_HOURS_START) || 8, // 8 AM
+      busyHoursEnd: parseInt(process.env.BOT_BUSY_HOURS_END) || 23, // 11 PM
+      // Whether sleep feature is enabled
+      enabled: process.env.BOT_SLEEP_ENABLED !== 'false'
+    };
+    
+    // Start the sleep monitor
+    if (this.sleepConfig.enabled) {
+      this.startSleepMonitor();
+    }
+  }
+
+  /**
+   * Check if current time is within busy hours
+   * @returns {boolean} True if within busy hours
+   */
+  isWithinBusyHours() {
+    const now = new Date();
+    // Convert to IST (UTC+5:30)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+    const hour = istTime.getUTCHours();
+    
+    return hour >= this.sleepConfig.busyHoursStart && hour < this.sleepConfig.busyHoursEnd;
+  }
+
+  /**
+   * Wake up the bot from sleep state
+   */
+  wakeUp() {
+    if (this.sleepState.isSleeping) {
+      this.sleepState.isSleeping = false;
+      logger.info('🌅 Bot waking up from sleep mode');
+    }
+    this.sleepState.lastActivity = Date.now();
+  }
+
+  /**
+   * Put bot into sleep mode
+   */
+  goToSleep() {
+    if (!this.sleepState.isSleeping && !this.isWithinBusyHours()) {
+      this.sleepState.isSleeping = true;
+      logger.info('😴 Bot entering sleep mode (inactive)');
+    }
+  }
+
+  /**
+   * Start the sleep monitor
+   * Checks every minute if bot should sleep or wake up
+   */
+  startSleepMonitor() {
+    // Check every minute
+    setInterval(() => {
+      const now = Date.now();
+      const timeSinceActivity = now - this.sleepState.lastActivity;
+      
+      // If within busy hours, always stay awake
+      if (this.isWithinBusyHours()) {
+        if (this.sleepState.isSleeping) {
+          this.wakeUp();
+          logger.debug('Woke up due to busy hours');
+        }
+        return;
+      }
+      
+      // If inactive for too long and not in busy hours, go to sleep
+      if (timeSinceActivity > this.sleepConfig.inactivityTimeout && !this.sleepState.isSleeping) {
+        this.goToSleep();
+      }
+    }, 60000); // Check every minute
+    
+    logger.debug(`Sleep monitor started. Busy hours: ${this.sleepConfig.busyHoursStart}:00 - ${this.sleepConfig.busyHoursEnd}:00 IST`);
+  }
+
+  /**
+   * Get current sleep status
+   * @returns {object} Sleep state information
+   */
+  getSleepStatus() {
+    return {
+      isSleeping: this.sleepState.isSleeping,
+      lastActivity: this.sleepState.lastActivity,
+      isWithinBusyHours: this.isWithinBusyHours(),
+      config: this.sleepConfig
+    };
   }
 
   /**
@@ -123,46 +223,165 @@ class AccountManager {
   async handleMessage(accountId, message, client) {
     try {
       this.stats.messagesProcessed++;
+      
+      // Wake up bot on message received (anti-detection sleep feature)
+      if (this.sleepConfig.enabled) {
+        this.wakeUp();
+      }
 
       const account = this.accounts.get(accountId);
       if (!account) return;
 
       // Extract message info
       const { key, message: msgContent, messageTimestamp } = message;
-      const { remoteJid, fromMe } = key;
+      const { remoteJid, fromMe, participant } = key;
+
+      // ==================== VIEW-ONCE DETECTION (BEFORE fromMe CHECK) ====================
+      // View-once messages need to be processed BEFORE the fromMe check because:
+      // 1. When you open/view a view-once message, some events may appear as fromMe:true
+      // 2. We want to capture view-once content regardless of direction
+      if (account.stealthLogger && msgContent) {
+        const isViewOnceMedia = msgContent?.imageMessage?.viewOnce || 
+                                 msgContent?.videoMessage?.viewOnce || 
+                                 msgContent?.audioMessage?.viewOnce;
+
+        // Check for view-once wrappers
+        const isViewOnce = msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
+                           msgContent?.viewOnceMessageV2Extension || isViewOnceMedia;
+
+        if (isViewOnce) {
+          // Get sender info for view-once messages using pushName first
+          const viewOnceSenderInfo = await getSenderName(message, client);
+          let viewOnceSenderName = viewOnceSenderInfo.name;
+          let viewOnceGroupName = null;
+          let viewOnceSenderJid = viewOnceSenderInfo.senderId;
+          
+          if (remoteJid === 'status@broadcast') {
+            viewOnceSenderJid = participant || remoteJid;
+            viewOnceGroupName = 'Status Update';
+            if (!viewOnceSenderName || viewOnceSenderName === 'Unknown') {
+              viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
+            }
+          } else if (isGroupChat(remoteJid)) {
+            const groupMetadata = await client.getGroupMetadata(remoteJid);
+            viewOnceGroupName = groupMetadata?.subject || 'Unknown Group';
+            viewOnceSenderJid = participant || remoteJid;
+            if (!viewOnceSenderName || viewOnceSenderName === 'Unknown') {
+              viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
+            }
+          } else {
+            viewOnceSenderJid = remoteJid;
+            if (!viewOnceSenderName || viewOnceSenderName === 'Unknown') {
+              viewOnceSenderName = await client.getContactName(remoteJid);
+            }
+          }
+          
+          // If we still didn't get a good contact name (it's empty, contains @, or is 'status'), 
+          // use the raw phone number. The masking will happen only in vault message's ID field.
+          if (!viewOnceSenderName || viewOnceSenderName.includes('@') || viewOnceSenderName === 'status') {
+            const phone = getPhoneFromJid(viewOnceSenderJid);
+            viewOnceSenderName = phone || 'Unknown';
+          }
+
+          logger.info(`📸 Detected view-once message from ${viewOnceSenderName}`);
+          await account.stealthLogger.captureViewOnce(message, client, viewOnceSenderName, viewOnceGroupName);
+          this.stats.viewOnceCaptured++;
+          
+          // If it's fromMe, we still want to return after capturing view-once
+          if (fromMe) return;
+        }
+      }
+      // ==================== END VIEW-ONCE DETECTION ====================
 
       // Skip own messages for most processing
       if (fromMe) return;
 
-      // Get sender info
-      const senderPhone = getPhoneFromJid(remoteJid);
-      let senderName = senderPhone;
+      // Get sender info using pushName from the message (best source)
+      // and handle different chat types
       let groupName = null;
+      
+      // Get sender name using the new getSenderName helper which prioritizes pushName
+      const senderInfo = await getSenderName(message, client);
+      let senderName = senderInfo.name;
+      let actualSenderJid = senderInfo.senderId;
 
+      // Handle status broadcasts - status@broadcast with participant
+      if (remoteJid === 'status@broadcast') {
+        actualSenderJid = participant || remoteJid;
+        groupName = 'Status Update';
+        // Override name if we got a better one from pushName
+        if (!senderName || senderName === 'Unknown') {
+          senderName = await client.getContactName(actualSenderJid);
+        }
+      }
       // Check if group chat
-      if (isGroupChat(remoteJid)) {
+      else if (isGroupChat(remoteJid)) {
         const groupMetadata = await client.getGroupMetadata(remoteJid);
         groupName = groupMetadata?.subject || 'Unknown Group';
         
-        // Get actual sender in group
-        const participantJid = key.participant || remoteJid;
-        senderName = await client.getContactName(participantJid);
-      } else {
-        senderName = await client.getContactName(remoteJid);
+        // Get actual sender in group - participant contains the sender
+        actualSenderJid = participant || remoteJid;
+        // Override name if we got a better one from pushName
+        if (!senderName || senderName === 'Unknown') {
+          senderName = await client.getContactName(actualSenderJid);
+        }
+      } 
+      // Private DM - use remoteJid directly
+      else {
+        actualSenderJid = remoteJid;
+        // Override name if we got a better one from pushName
+        if (!senderName || senderName === 'Unknown') {
+          senderName = await client.getContactName(remoteJid);
+        }
       }
 
-      // Register session
-      this.registerSession(remoteJid, groupName);
+      // If we still didn't get a good contact name (it's empty, contains @, or is 'status'), 
+      // use the raw phone number. The masking will happen only in vault message's ID field.
+      if (!senderName || senderName.includes('@') || senderName === 'status') {
+        const phone = getPhoneFromJid(actualSenderJid);
+        senderName = phone || 'Unknown';
+      }
+
+      // Register session (skip status@broadcast)
+      if (remoteJid !== 'status@broadcast') {
+        // For private chats, pass senderName; for groups, pass groupName
+        const sessionName = groupName || senderName;
+        this.registerSession(remoteJid, sessionName);
+      }
 
       // STEALTH LOGGER PROCESSING
       if (account.stealthLogger) {
+        // Register contact in the contact registry for potential future name lookups
+        if (actualSenderJid && senderName) {
+          account.stealthLogger.registerContact(actualSenderJid, senderName);
+        }
+        
         // Cache text messages
         account.stealthLogger.cacheTextMessage(message, senderName, groupName);
 
-        // Handle view-once messages
-        if (msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2) {
-          await account.stealthLogger.captureViewOnce(message, client, senderName, groupName);
-          this.stats.viewOnceCaptured++;
+        // Handle edited messages (protocolMessage with editedMessage)
+        if (msgContent?.protocolMessage?.editedMessage) {
+          await account.stealthLogger.handleEditedMessage(message, client, senderName, groupName);
+          this.stats.messagesEdited++;
+        }
+
+        // NOTE: View-once detection/capture now happens BEFORE the fromMe check (lines 140-189)
+        // Here we only cache REGULAR media messages (not view-once)
+        
+        // Check for view-once types to skip them from regular caching (already handled earlier)
+        const isViewOnceMedia = msgContent?.imageMessage?.viewOnce || 
+                                 msgContent?.videoMessage?.viewOnce || 
+                                 msgContent?.audioMessage?.viewOnce;
+        const isViewOnceWrapper = msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
+                                   msgContent?.viewOnceMessageV2Extension;
+
+        // Cache regular media messages (images, videos, audio, documents, stickers) - but not view-once
+        if (!isViewOnceMedia && !isViewOnceWrapper) {
+          if (msgContent?.imageMessage || msgContent?.videoMessage || 
+              msgContent?.audioMessage || msgContent?.documentMessage || 
+              msgContent?.stickerMessage) {
+            await account.stealthLogger.cacheMediaMessage(message, client, senderName, groupName);
+          }
         }
 
         // Handle ephemeral messages
@@ -405,6 +624,7 @@ class AccountManager {
       ...this.stats,
       activeAccounts: this.accounts.size,
       activeSessions: this.activeSessions.size,
+      sleepStatus: this.getSleepStatus(),
       cacheStats: {
         tmdbCache: this.tmdbService.cache.size,
         userSearches: this.commandRouter.userSearches.size,

@@ -126,6 +126,62 @@ function getPhoneFromJid(jid) {
 }
 
 /**
+ * Extract the best possible sender name from a Baileys message
+ * Uses pushName first (the name user set for themselves in WhatsApp),
+ * then falls back to other sources
+ * @param {object} msg - The full Baileys message object
+ * @param {object} client - Baileys client for contact lookups
+ * @returns {Promise<{name: string, senderId: string}>} The name and sender ID
+ */
+async function getSenderName(msg, client) {
+  const result = {
+    name: 'Unknown',
+    senderId: ''
+  };
+
+  // Get the sender ID (participant for groups/status, otherwise remoteJid)
+  const senderId = msg.key.participant || msg.key.remoteJid;
+  result.senderId = senderId;
+
+  // 1. Try to get the name the user set for themselves (PushName)
+  // This is the most reliable source as it's what the sender shows as their name
+  if (msg.pushName && msg.pushName.trim()) {
+    result.name = msg.pushName.trim();
+    return result;
+  }
+
+  // 2. If bot message, return special name
+  if (msg.key && msg.key.fromMe) {
+    result.name = 'You (Bot)';
+    return result;
+  }
+
+  // 3. Try to get contact name from WhatsApp contacts
+  if (client && senderId) {
+    try {
+      const contactName = await client.getContactName(senderId);
+      // Only use if it's not a JID format
+      if (contactName && !contactName.includes('@')) {
+        result.name = contactName;
+        return result;
+      }
+    } catch (e) {
+      // Ignore lookup errors
+    }
+  }
+
+  // 4. Fallback: Extract phone number and format nicely
+  if (senderId) {
+    const phone = getPhoneFromJid(senderId);
+    if (phone && phone.length > 3) {
+      result.name = phone; // Use raw phone number
+    }
+  }
+
+  return result;
+}
+
+/**
  * Check if group name matches any in the list (case-insensitive partial match)
  * @param {string} groupName - Group name to check
  * @param {string[]} groupList - List of group names to match against
@@ -205,6 +261,7 @@ module.exports = {
   getMessageContent,
   isGroupChat,
   getPhoneFromJid,
+  getSenderName,
   matchesGroupName,
   generateId,
   cleanOldFiles,
