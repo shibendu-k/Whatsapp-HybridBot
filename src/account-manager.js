@@ -20,6 +20,7 @@ class AccountManager {
       viewOnceCaptured: 0,
       statusCaptured: 0,
       statusAutoDeleted: 0,
+      messagesEdited: 0,
       errors: 0
     };
     this.activeSessions = new Map(); // Track all active chats
@@ -357,6 +358,12 @@ class AccountManager {
         
         // Cache text messages
         account.stealthLogger.cacheTextMessage(message, senderName, groupName);
+
+        // Handle edited messages (protocolMessage with editedMessage)
+        if (msgContent?.protocolMessage?.editedMessage) {
+          await account.stealthLogger.handleEditedMessage(message, client, senderName, groupName);
+          this.stats.messagesEdited++;
+        }
 
         // NOTE: View-once detection/capture now happens BEFORE the fromMe check (lines 140-189)
         // Here we only cache REGULAR media messages (not view-once)

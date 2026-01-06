@@ -23,6 +23,7 @@ class StealthLoggerService {
     this.textCache = new Map(); // Cache text messages
     this.mediaCache = new Map(); // Cache media metadata
     this.contactRegistry = new Map(); // Registry to store contact names by JID
+    this.editHistory = new Map(); // Track message edit history
     // Use account-specific temp storage folder for easier debugging
     const baseTempStorage = process.env.TEMP_STORAGE_PATH || './temp_storage';
     this.tempStorage = path.join(baseTempStorage, accountId);
@@ -148,6 +149,118 @@ class StealthLoggerService {
     });
 
     logger.debug(`Cached text message: ${messageId.substring(0, 10)}...`);
+  }
+
+  /**
+   * Handle edited text message
+   * Tracks edit history and stores all versions including original
+   * @param {object} message - Message object with edit info
+   * @param {object} client - Baileys client
+   * @param {string} senderName - Sender name
+   * @param {string} groupName - Group name (if from group)
+   */
+  async handleEditedMessage(message, client, senderName, groupName = null) {
+    try {
+      // Check exclusions
+      if (groupName && this.isGroupExcluded(groupName)) {
+        return;
+      }
+
+      const editedMessage = message.message?.protocolMessage?.editedMessage;
+      if (!editedMessage) return;
+
+      // Get the key of the original message being edited
+      const originalKey = message.message?.protocolMessage?.key;
+      if (!originalKey) return;
+
+      const originalMessageId = originalKey.id;
+      const newText = getMessageContent(editedMessage);
+      
+      if (!newText) return;
+
+      // Sanitize sender ID
+      const actualSenderId = this.sanitizeJid(message.key.participant || message.key.remoteJid);
+      const isStatus = message.key.remoteJid === 'status@broadcast';
+
+      // Get or create edit history for this message
+      let history = this.editHistory.get(originalMessageId);
+      
+      if (!history) {
+        // First edit - check if we have the original in text cache
+        const cachedOriginal = this.textCache.get(originalMessageId);
+        
+        history = {
+          originalText: cachedOriginal?.text || '[Original text not cached]',
+          edits: [],
+          sender: senderName,
+          senderId: actualSenderId,
+          groupName,
+          isStatus,
+          originalTimestamp: cachedOriginal?.timestamp || message.messageTimestamp,
+          createdAt: Date.now()
+        };
+        this.editHistory.set(originalMessageId, history);
+      }
+
+      // Add this edit to history
+      history.edits.push({
+        text: newText,
+        timestamp: Date.now()
+      });
+
+      logger.info(`✏️ Message edited by ${senderName} (edit #${history.edits.length})`);
+
+      // Send edit notification to vault
+      await this.sendEditHistoryToVault(client, originalMessageId, history);
+    } catch (error) {
+      logger.error('Failed to handle edited message', error);
+    }
+  }
+
+  /**
+   * Send edit history to vault
+   * @param {object} client - Baileys client
+   * @param {string} messageId - Original message ID
+   * @param {object} history - Edit history object
+   */
+  async sendEditHistoryToVault(client, messageId, history) {
+    try {
+      const vaultNumber = this.config.vaultNumber || client.vaultNumber;
+      if (!vaultNumber) {
+        logger.warn('Vault number not configured, skipping edit history send');
+        return;
+      }
+
+      const vaultJid = vaultNumber.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+      
+      const { getPhoneFromJid } = require('../utils/helpers');
+      const maskedId = maskPhoneNumber(getPhoneFromJid(history.senderId));
+      const formattedTime = formatTimestamp(history.originalTimestamp);
+
+      let message = `✏️ *Message Edited*\n`;
+      message += `━━━━━━━━━━━━━━━━\n`;
+      message += `👤 Sender: ${history.sender}\n`;
+      message += `📞 ID: ${maskedId}\n`;
+      message += `⏰ Original Time: ${formattedTime}\n`;
+      
+      if (history.groupName) {
+        message += `👥 Group: ${history.groupName}\n`;
+      }
+      
+      message += `📝 Edit Count: ${history.edits.length}\n\n`;
+      message += `📄 *Original Message:*\n${history.originalText}\n`;
+      
+      // Add all edit versions
+      history.edits.forEach((edit, index) => {
+        const editTime = formatTimestamp(Math.floor(edit.timestamp / 1000));
+        message += `\n📝 *Edit ${index + 1}* (${editTime}):\n${edit.text}`;
+      });
+
+      await client.sendMessage(vaultJid, message);
+      logger.success(`Sent edit history to vault (${history.edits.length} edits)`);
+    } catch (error) {
+      logger.error('Failed to send edit history to vault', error);
+    }
   }
 
   /**
@@ -718,8 +831,18 @@ class StealthLoggerService {
         }
       }
       
-      logger.debug(`Cleanup complete. Deleted: ${statusFilesDeleted} status files, ${mediaFilesDeleted} media files, ${textEntriesDeleted} text entries`);
-      logger.debug(`Remaining cache: Text=${this.textCache.size}, Media=${this.mediaCache.size}`);
+      // Clean edit history (keep same duration as regular media - 68 hours)
+      let editHistoryDeleted = 0;
+      for (const [key, value] of this.editHistory.entries()) {
+        const age = now - value.createdAt;
+        if (age > this.MEDIA_CACHE_DURATION) {
+          this.editHistory.delete(key);
+          editHistoryDeleted++;
+        }
+      }
+      
+      logger.debug(`Cleanup complete. Deleted: ${statusFilesDeleted} status files, ${mediaFilesDeleted} media files, ${textEntriesDeleted} text entries, ${editHistoryDeleted} edit histories`);
+      logger.debug(`Remaining cache: Text=${this.textCache.size}, Media=${this.mediaCache.size}, EditHistory=${this.editHistory.size}`);
     } catch (error) {
       logger.error('Cleanup failed', error);
     }
@@ -750,6 +873,7 @@ class StealthLoggerService {
       textCached: this.textCache.size,
       mediaCached: this.mediaCache.size,
       contactsRegistered: this.contactRegistry.size,
+      editHistoryTracked: this.editHistory.size,
       excludedGroups: this.config.excludedGroups.length
     };
   }
