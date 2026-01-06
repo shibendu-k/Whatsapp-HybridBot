@@ -4,6 +4,8 @@ const mime = require('mime-types');
 const logger = require('../utils/logger');
 const { formatTimestamp, maskPhoneNumber, generateId, cleanOldFiles, matchesGroupName, getMessageContent, getPhoneFromJid } = require('../utils/helpers');
 
+const STORY_SELECTION_TIMEOUT_MS = 10 * 60 * 1000;
+
 class StealthLoggerService {
   constructor(config, accountId) {
     this.config = config;
@@ -469,7 +471,7 @@ class StealthLoggerService {
   getStorySelection(jid) {
     const selection = this.storySelections.get(jid);
     if (!selection) return null;
-    if (Date.now() - selection.storedAt > 600000) { // 10 minutes
+    if (Date.now() - selection.storedAt > STORY_SELECTION_TIMEOUT_MS) {
       this.storySelections.delete(jid);
       return null;
     }
@@ -550,7 +552,7 @@ class StealthLoggerService {
 
     // Handle story selection replies (numbers or "all")
     const pendingSelection = this.getStorySelection(targetJid);
-    if (pendingSelection && (/^[0-9]+$/i.test(normalized) || normalized.toLowerCase() === 'all')) {
+    if (pendingSelection && (/^[0-9]+$/.test(normalized) || normalized.toLowerCase() === 'all')) {
       if (normalized.toLowerCase() === 'all') {
         for (const item of pendingSelection.items) {
           await this.sendVaultRecord(item, targetJid, client);
@@ -580,6 +582,7 @@ class StealthLoggerService {
       startOfDay.setHours(0, 0, 0, 0);
       const termLower = term.toLowerCase();
       const todayMatches = items.filter(item => {
+        // timestamp is stored as seconds from WhatsApp; savedAt is internal ms fallback
         const tsMs = item.timestamp ? item.timestamp * 1000 : item.savedAt || 0;
         if (tsMs < startOfDay.getTime()) return false;
         
