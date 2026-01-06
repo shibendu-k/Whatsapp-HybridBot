@@ -163,6 +163,106 @@ class CommandRouter {
   }
 
   /**
+   * Format detailed information as caption for poster
+   * @param {object} details - Movie/Series details
+   * @param {string} type - 'movie' or 'series'
+   * @returns {string} Formatted caption
+   */
+  formatDetailsCaption(details, type) {
+    const emoji = type === 'movie' ? '🎬' : '📺';
+    let caption = '';
+    
+    // Title with country flag
+    caption += `${emoji} *${details.title}`;
+    if (details.countryFlag) {
+      caption += ` ${details.countryFlag}`;
+    }
+    caption += `*\n`;
+    caption += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    // Release date
+    caption += `📅 *Release Date:* ${details.releaseDate}\n`;
+    
+    // Genre
+    caption += `🎭 *Genre:* ${details.genres}\n`;
+    
+    // Rating
+    caption += `⭐ *Rating:* ${details.rating}/10\n`;
+    
+    // For series, add season/episode info
+    if (type === 'series') {
+      if (details.numberOfSeasons) {
+        caption += `📺 *Seasons:* ${details.numberOfSeasons}`;
+        if (details.numberOfEpisodes) {
+          caption += ` | *Episodes:* ${details.numberOfEpisodes}`;
+        }
+        caption += `\n`;
+      }
+      if (details.status && details.status !== 'N/A') {
+        caption += `📊 *Status:* ${details.status}\n`;
+      }
+    } else if (type === 'movie' && details.runtime) {
+      caption += `⏱️ *Runtime:* ${details.runtime} min\n`;
+    }
+    
+    caption += `\n`;
+    
+    // Story/Description
+    caption += `📖 *Story:*\n${details.description}\n\n`;
+    
+    // Collection/Universe info
+    if (details.collectionInfo) {
+      caption += `🌌 *Part of:* ${details.collectionInfo.name}\n\n`;
+    }
+    
+    // Top 5 actors horizontally with emojis
+    if (details.cast && details.cast.length > 0) {
+      caption += `👥 *Cast:*\n`;
+      caption += details.cast.map((actor, i) => `   ${i + 1}. ${actor}`).join('\n');
+      caption += `\n\n`;
+    }
+    
+    // Trailer
+    if (details.trailer) {
+      caption += `🎥 *Trailer:*\n${details.trailer}\n\n`;
+    }
+    
+    // Streaming platforms
+    if (details.streaming && details.streaming.length > 0) {
+      caption += `📺 *Available on:*\n`;
+      details.streaming.forEach(platform => {
+        caption += `   • ${platform}\n`;
+      });
+      caption += `\n`;
+    } else {
+      caption += `📺 *Streaming:* Not available on major platforms\n\n`;
+    }
+    
+    // Watch links
+    if (details.watchLinks && details.watchLinks.length > 0) {
+      caption += `🔗 *Watch Links:*\n`;
+      const uniquePlatforms = [...new Set(details.watchLinks.map(w => w.platform))];
+      uniquePlatforms.forEach(platform => {
+        const link = details.watchLinks.find(w => w.platform === platform)?.link;
+        if (link) {
+          caption += `   • ${platform}: ${link}\n`;
+        }
+      });
+      caption += `\n`;
+    }
+    
+    // IMDb link
+    if (details.imdbLink) {
+      caption += `⭐ *IMDb:* ${details.imdbLink}\n`;
+    }
+    
+    caption += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+    caption += `_Powered by TMDB_`;
+    
+    return caption;
+  }
+
+  /**
    * Clean up expired data periodically
    */
   startCleanupInterval() {

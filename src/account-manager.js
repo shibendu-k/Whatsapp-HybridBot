@@ -268,16 +268,21 @@ class AccountManager {
           ? await this.tmdbService.getMovieDetails(selected.id)
           : await this.tmdbService.getSeriesDetails(selected.id);
 
-        // Send details
-        const response = this.commandRouter.formatDetails(details);
-        await client.sendMessage(message.key.remoteJid, response);
-
-        // Download and send poster
+        // Download poster and send with formatted caption
         if (details.poster) {
           const posterBuffer = await this.tmdbService.downloadPoster(details.poster);
           if (posterBuffer) {
-            await client.sendMedia(message.key.remoteJid, posterBuffer, 'image', '🎬 Movie Poster');
+            const caption = this.commandRouter.formatDetailsCaption(details, searchState.type);
+            await client.sendMedia(message.key.remoteJid, posterBuffer, 'image', caption);
+          } else {
+            // If poster download fails, send as text message
+            const response = this.commandRouter.formatDetailsCaption(details, searchState.type);
+            await client.sendMessage(message.key.remoteJid, response);
           }
+        } else {
+          // If no poster available, send as text message
+          const response = this.commandRouter.formatDetailsCaption(details, searchState.type);
+          await client.sendMessage(message.key.remoteJid, response);
         }
 
         // Clear search state
