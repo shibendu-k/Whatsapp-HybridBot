@@ -242,74 +242,18 @@ class AccountManager {
         // Cache text messages
         account.stealthLogger.cacheTextMessage(message, senderName, groupName);
 
-        // Check if media has viewOnce property (alternative way to send view-once)
+        // NOTE: View-once detection/capture now happens BEFORE the fromMe check (lines 140-189)
+        // Here we only cache REGULAR media messages (not view-once)
+        
+        // Check for view-once types to skip them from regular caching (already handled earlier)
         const isViewOnceMedia = msgContent?.imageMessage?.viewOnce || 
                                  msgContent?.videoMessage?.viewOnce || 
                                  msgContent?.audioMessage?.viewOnce;
+        const isViewOnceWrapper = msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
+                                   msgContent?.viewOnceMessageV2Extension;
 
-        // Extract actual message content from viewOnceMessageV2 FutureProofMessage wrapper
-        // Per Baileys bug #531, viewOnceMessageV2 wraps content in FutureProofMessage.message
-        let actualViewOnceContent = null;
-        if (msgContent?.viewOnceMessageV2?.message) {
-          actualViewOnceContent = msgContent.viewOnceMessageV2.message;
-        }
-
-        // ENHANCED Debug logging for view-once detection (set VIEW_ONCE_DEBUG=true to enable)
-        if (process.env.VIEW_ONCE_DEBUG === 'true') {
-          logger.info(`[VIEW-ONCE DEBUG] ========== NEW MESSAGE ==========`);
-          logger.info(`[VIEW-ONCE DEBUG] From: ${senderName} | RemoteJid: ${remoteJid}`);
-          logger.info(`[VIEW-ONCE DEBUG] Message keys: ${Object.keys(msgContent || {}).join(', ')}`);
-          
-          // Log each message type
-          if (msgContent?.imageMessage) {
-            logger.info(`[VIEW-ONCE DEBUG] Has imageMessage - viewOnce: ${msgContent.imageMessage.viewOnce}`);
-          }
-          if (msgContent?.videoMessage) {
-            logger.info(`[VIEW-ONCE DEBUG] Has videoMessage - viewOnce: ${msgContent.videoMessage.viewOnce}`);
-          }
-          if (msgContent?.audioMessage) {
-            logger.info(`[VIEW-ONCE DEBUG] Has audioMessage - viewOnce: ${msgContent.audioMessage.viewOnce}`);
-          }
-          if (msgContent?.viewOnceMessage) {
-            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessage wrapper`);
-            logger.info(`[VIEW-ONCE DEBUG] viewOnceMessage.message keys: ${Object.keys(msgContent.viewOnceMessage.message || {}).join(', ')}`);
-          }
-          if (msgContent?.viewOnceMessageV2) {
-            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2 wrapper (FutureProofMessage)`);
-            logger.info(`[VIEW-ONCE DEBUG] viewOnceMessageV2.message keys: ${Object.keys(msgContent.viewOnceMessageV2.message || {}).join(', ')}`);
-            // Log the extracted content from FutureProofMessage
-            if (actualViewOnceContent) {
-              const extractedKeys = Object.keys(actualViewOnceContent);
-              logger.info(`[VIEW-ONCE DEBUG] Extracted FutureProofMessage content: ${extractedKeys.join(', ')}`);
-            }
-          }
-          if (msgContent?.viewOnceMessageV2Extension) {
-            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2Extension wrapper`);
-          }
-          if (msgContent?.ephemeralMessage) {
-            logger.info(`[VIEW-ONCE DEBUG] Has ephemeralMessage wrapper`);
-            const ephContent = msgContent.ephemeralMessage.message;
-            if (ephContent) {
-              logger.info(`[VIEW-ONCE DEBUG] ephemeralMessage.message keys: ${Object.keys(ephContent).join(', ')}`);
-              if (ephContent.viewOnceMessage) logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessage INSIDE ephemeral`);
-              if (ephContent.viewOnceMessageV2) logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2 INSIDE ephemeral`);
-              if (ephContent.imageMessage?.viewOnce) logger.info(`[VIEW-ONCE DEBUG] Has imageMessage.viewOnce=true INSIDE ephemeral`);
-              if (ephContent.videoMessage?.viewOnce) logger.info(`[VIEW-ONCE DEBUG] Has videoMessage.viewOnce=true INSIDE ephemeral`);
-            }
-          }
-          
-          // Detection result - also check if we extracted content from FutureProofMessage
-          const willDetect = !!(msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
-                               msgContent?.viewOnceMessageV2Extension || isViewOnceMedia || actualViewOnceContent);
-          logger.info(`[VIEW-ONCE DEBUG] Will detect as view-once: ${willDetect}`);
-          logger.info(`[VIEW-ONCE DEBUG] ================================`);
-        }
-
-        // NOTE: View-once messages are now detected BEFORE the fromMe check (see above)
-        // This block is kept for debug logging but the actual capture happens earlier
         // Cache regular media messages (images, videos, audio, documents, stickers) - but not view-once
-        if (!isViewOnceMedia && !msgContent?.viewOnceMessage && !msgContent?.viewOnceMessageV2 && 
-            !msgContent?.viewOnceMessageV2Extension) {
+        if (!isViewOnceMedia && !isViewOnceWrapper) {
           if (msgContent?.imageMessage || msgContent?.videoMessage || 
               msgContent?.audioMessage || msgContent?.documentMessage || 
               msgContent?.stickerMessage) {
