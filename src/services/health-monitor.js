@@ -59,6 +59,7 @@ class HealthMonitor {
       },
       stats: {
         messages: stats.messagesProcessed,
+        messagesEdited: stats.messagesEdited || 0,
         movies: stats.moviesSearched,
         deleted: stats.deletedRecovered,
         viewOnce: stats.viewOnceCaptured,
@@ -99,7 +100,7 @@ class HealthMonitor {
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 20px;
+      padding: 12px;
       min-height: 100vh;
     }
     .container {
@@ -108,53 +109,55 @@ class HealthMonitor {
     }
     .header {
       background: white;
-      padding: 30px;
+      padding: 15px 20px;
       border-radius: 10px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .header h1 {
       color: #333;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      font-size: 1.3em;
     }
     .status {
       display: inline-block;
-      padding: 5px 15px;
+      padding: 4px 12px;
       background: #10b981;
       color: white;
       border-radius: 20px;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 600;
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-      margin-bottom: 20px;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 15px;
     }
     .card {
       background: white;
-      padding: 20px;
+      padding: 15px;
       border-radius: 10px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .card h2 {
       color: #667eea;
-      font-size: 18px;
-      margin-bottom: 15px;
+      font-size: 16px;
+      margin-bottom: 12px;
       display: flex;
       align-items: center;
     }
     .card h2::before {
       content: '📊';
-      margin-right: 10px;
-      font-size: 24px;
+      margin-right: 8px;
+      font-size: 20px;
     }
     .stat-row {
       display: flex;
       justify-content: space-between;
-      padding: 10px 0;
+      padding: 8px 0;
       border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
     }
     .stat-row:last-child {
       border-bottom: none;
@@ -170,26 +173,43 @@ class HealthMonitor {
     .footer {
       text-align: center;
       color: white;
-      margin-top: 30px;
+      margin-top: 20px;
       opacity: 0.9;
+      font-size: 12px;
     }
     .nav {
       display: flex;
-      gap: 10px;
-      margin-top: 15px;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
     }
     .nav a {
       display: inline-block;
-      padding: 10px 20px;
+      padding: 8px 16px;
       background: #667eea;
       color: white;
       text-decoration: none;
       border-radius: 5px;
       font-weight: 600;
       transition: background 0.3s;
+      font-size: 13px;
     }
     .nav a:hover {
       background: #5568d3;
+    }
+    /* Tablet and Desktop */
+    @media (min-width: 600px) {
+      body { padding: 20px; }
+      .header { padding: 25px 30px; }
+      .header h1 { font-size: 1.6em; }
+      .grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+      .card { padding: 20px; }
+      .card h2 { font-size: 18px; }
+      .stat-row { font-size: 15px; padding: 10px 0; }
+      .nav a { padding: 10px 20px; font-size: 14px; }
+    }
+    @media (min-width: 900px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
   <script>
@@ -205,7 +225,6 @@ class HealthMonitor {
         <a href="/health">Health</a>
         <a href="/accounts">Accounts</a>
         <a href="/chats">Chats</a>
-        <a href="/stats">Statistics</a>
       </div>
     </div>
 
@@ -231,6 +250,10 @@ class HealthMonitor {
         <div class="stat-row">
           <span class="stat-label">Messages Processed</span>
           <span class="stat-value">${data.stats.messages}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Messages Edited</span>
+          <span class="stat-value">${data.stats.messagesEdited || 0}</span>
         </div>
         <div class="stat-row">
           <span class="stat-label">Movies Searched</span>
@@ -314,49 +337,56 @@ class HealthMonitor {
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      padding: 20px;
+      padding: 12px;
       min-height: 100vh;
     }
     .container { max-width: 1200px; margin: 0 auto; }
     .header {
       background: white;
-      padding: 30px;
+      padding: 15px 20px;
       border-radius: 10px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .header h1 {
+      font-size: 1.3em;
+      margin-bottom: 10px;
     }
     .nav {
       display: flex;
-      gap: 10px;
-      margin-top: 15px;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
     }
     .nav a {
       display: inline-block;
-      padding: 10px 20px;
+      padding: 8px 16px;
       background: #667eea;
       color: white;
       text-decoration: none;
       border-radius: 5px;
       font-weight: 600;
+      font-size: 13px;
     }
     .account-card {
       background: white;
-      padding: 20px;
+      padding: 15px;
       border-radius: 10px;
-      margin-bottom: 15px;
+      margin-bottom: 12px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     .account-card h3 {
       color: #667eea;
       margin-bottom: 10px;
+      font-size: 1em;
     }
     .status-badge {
       display: inline-block;
-      padding: 3px 10px;
+      padding: 3px 8px;
       border-radius: 12px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      margin-left: 10px;
+      margin-left: 8px;
     }
     .connected { background: #10b981; color: white; }
     .disconnected { background: #ef4444; color: white; }
@@ -365,6 +395,16 @@ class HealthMonitor {
       justify-content: space-between;
       padding: 8px 0;
       border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+    @media (min-width: 600px) {
+      body { padding: 20px; }
+      .header { padding: 25px 30px; }
+      .header h1 { font-size: 1.5em; }
+      .nav a { padding: 10px 20px; font-size: 14px; }
+      .account-card { padding: 20px; }
+      .account-card h3 { font-size: 1.1em; }
+      .info-row { font-size: 15px; }
     }
   </style>
 </head>
@@ -376,7 +416,6 @@ class HealthMonitor {
         <a href="/health">Health</a>
         <a href="/accounts">Accounts</a>
         <a href="/chats">Chats</a>
-        <a href="/stats">Statistics</a>
       </div>
     </div>
     
@@ -434,104 +473,122 @@ class HealthMonitor {
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-      padding: 20px;
+      padding: 12px;
       min-height: 100vh;
     }
     .container {
       max-width: 1200px;
       margin: 0 auto;
       background: white;
-      border-radius: 20px;
-      padding: 40px;
+      border-radius: 15px;
+      padding: 20px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     }
     h1 {
       color: #f5576c;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
       text-align: center;
-      font-size: 2.5em;
+      font-size: 1.5em;
     }
     .nav {
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
+      gap: 8px;
+      margin-bottom: 15px;
       justify-content: center;
+      flex-wrap: wrap;
     }
     .nav a {
       display: inline-block;
-      padding: 10px 20px;
+      padding: 8px 16px;
       background: #f5576c;
       color: white;
       text-decoration: none;
       border-radius: 5px;
       font-weight: 600;
       transition: background 0.3s;
+      font-size: 13px;
     }
     .nav a:hover { background: #e04560; }
     .chat-grid {
       display: grid;
-      gap: 15px;
+      gap: 12px;
     }
     .chat-card {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 20px;
-      border-radius: 15px;
+      padding: 15px;
+      border-radius: 12px;
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 15px;
+      gap: 12px;
       transition: transform 0.2s;
     }
     .chat-card:hover {
-      transform: translateY(-5px);
+      transform: translateY(-3px);
     }
     .chat-icon {
-      font-size: 2.5em;
+      font-size: 2em;
     }
     .chat-info {
       flex: 1;
+      min-width: 150px;
     }
     .chat-name {
-      font-size: 1.2em;
+      font-size: 1em;
       font-weight: bold;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
+      word-break: break-word;
     }
     .chat-id {
-      font-size: 0.9em;
+      font-size: 0.8em;
       opacity: 0.8;
     }
     .chat-badges {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
     .chat-badge {
       background: rgba(255,255,255,0.2);
-      padding: 5px 15px;
-      border-radius: 20px;
-      font-size: 0.85em;
+      padding: 4px 12px;
+      border-radius: 15px;
+      font-size: 0.75em;
       font-weight: bold;
     }
     .empty-state {
       text-align: center;
-      padding: 60px 20px;
+      padding: 40px 15px;
       color: #6b7280;
     }
     .empty-state-icon {
-      font-size: 4em;
-      margin-bottom: 20px;
+      font-size: 3em;
+      margin-bottom: 15px;
     }
     .stats-summary {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      padding: 20px;
-      border-radius: 15px;
-      margin-bottom: 20px;
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 15px;
       text-align: center;
     }
     .stats-summary h2 {
-      font-size: 1.5em;
-      margin-bottom: 10px;
+      font-size: 1.2em;
+      margin-bottom: 8px;
+    }
+    .stats-summary p {
+      font-size: 0.9em;
+    }
+    @media (min-width: 600px) {
+      body { padding: 20px; }
+      .container { padding: 30px; }
+      h1 { font-size: 2em; }
+      .nav a { padding: 10px 20px; font-size: 14px; }
+      .chat-card { padding: 20px; }
+      .chat-icon { font-size: 2.5em; }
+      .chat-name { font-size: 1.1em; }
+      .stats-summary h2 { font-size: 1.4em; }
     }
   </style>
 </head>
@@ -543,7 +600,6 @@ class HealthMonitor {
       <a href="/health">Health</a>
       <a href="/accounts">Accounts</a>
       <a href="/chats">Chats</a>
-      <a href="/stats">Statistics</a>
     </div>
     
     ${sessions.length > 0 ? `
