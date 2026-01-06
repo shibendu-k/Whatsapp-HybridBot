@@ -61,9 +61,8 @@ This enhancement updates the movie and series sending structure to display all d
    • Platform 2
    • Platform 3
 
-🔗 *Watch Links:*
-   • Platform 1: [Link]
-   • Platform 2: [Link]
+🔗 *Find on JustWatch:*
+[JustWatch Link]
 
 ⭐ *IMDb:* [IMDb Link]
 
@@ -136,9 +135,8 @@ https://www.youtube.com/watch?v=YoHD9XEInc0
    • Amazon Prime Video
    • Disney+ Hotstar
 
-🔗 *Watch Links:*
-   • Netflix: https://www.justwatch.com/in/movie/inception
-   • Amazon Prime Video: https://www.justwatch.com/in/movie/inception
+🔗 *Find on JustWatch:*
+https://www.justwatch.com/in/movie/inception
 
 ⭐ *IMDb:* https://www.imdb.com/title/tt1375666
 
@@ -175,8 +173,8 @@ https://www.youtube.com/watch?v=HhesaQXLuRY
 📺 *Available on:*
    • Netflix
 
-🔗 *Watch Links:*
-   • Netflix: https://www.justwatch.com/in/tv-show/breaking-bad
+🔗 *Find on JustWatch:*
+https://www.justwatch.com/in/tv-show/breaking-bad
 
 ⭐ *IMDb:* https://www.imdb.com/title/tt0903747
 
