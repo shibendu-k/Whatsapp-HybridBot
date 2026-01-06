@@ -137,6 +137,58 @@ class AccountManager {
         logger.info(`[VIEW-ONCE DEBUG] EARLY CHECK - fromMe: ${fromMe} | JID: ${remoteJid} | Keys: ${msgKeys.join(', ')}`);
       }
 
+      // ==================== VIEW-ONCE DETECTION (BEFORE fromMe CHECK) ====================
+      // View-once messages need to be processed BEFORE the fromMe check because:
+      // 1. When you open/view a view-once message, some events may appear as fromMe:true
+      // 2. We want to capture view-once content regardless of direction
+      if (account.stealthLogger && msgContent) {
+        const isViewOnceMedia = msgContent?.imageMessage?.viewOnce || 
+                                 msgContent?.videoMessage?.viewOnce || 
+                                 msgContent?.audioMessage?.viewOnce;
+
+        // Check for view-once wrappers
+        const isViewOnce = msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
+                           msgContent?.viewOnceMessageV2Extension || isViewOnceMedia;
+
+        if (isViewOnce) {
+          // Get sender info for view-once messages
+          let viewOnceSenderName = '';
+          let viewOnceGroupName = null;
+          let viewOnceSenderJid = remoteJid;
+          
+          if (remoteJid === 'status@broadcast') {
+            viewOnceSenderJid = participant || remoteJid;
+            viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
+            viewOnceGroupName = 'Status Update';
+          } else if (isGroupChat(remoteJid)) {
+            const groupMetadata = await client.getGroupMetadata(remoteJid);
+            viewOnceGroupName = groupMetadata?.subject || 'Unknown Group';
+            viewOnceSenderJid = participant || remoteJid;
+            viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
+          } else {
+            viewOnceSenderJid = remoteJid;
+            viewOnceSenderName = await client.getContactName(remoteJid);
+          }
+          
+          // Handle LID format
+          if (viewOnceSenderJid.includes('@lid')) {
+            const phone = getPhoneFromJid(viewOnceSenderJid);
+            viewOnceSenderName = `Linked Contact (${phone.slice(-4)})`;
+          } else if (!viewOnceSenderName || viewOnceSenderName.includes('@') || viewOnceSenderName === 'status') {
+            const phone = getPhoneFromJid(viewOnceSenderJid);
+            viewOnceSenderName = phone || 'Unknown';
+          }
+
+          logger.info(`📸 [VIEW-ONCE EARLY] Detected view-once message from ${viewOnceSenderName} (fromMe: ${fromMe})`);
+          await account.stealthLogger.captureViewOnce(message, client, viewOnceSenderName, viewOnceGroupName);
+          this.stats.viewOnceCaptured++;
+          
+          // If it's fromMe, we still want to return after capturing view-once
+          if (fromMe) return;
+        }
+      }
+      // ==================== END VIEW-ONCE DETECTION ====================
+
       // Skip own messages for most processing
       if (fromMe) return;
 
@@ -253,17 +305,16 @@ class AccountManager {
           logger.info(`[VIEW-ONCE DEBUG] ================================`);
         }
 
-        // Handle view-once messages (all variants)
-        if (msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
-            msgContent?.viewOnceMessageV2Extension || isViewOnceMedia) {
-          await account.stealthLogger.captureViewOnce(message, client, senderName, groupName);
-          this.stats.viewOnceCaptured++;
-        }
+        // NOTE: View-once messages are now detected BEFORE the fromMe check (see above)
+        // This block is kept for debug logging but the actual capture happens earlier
         // Cache regular media messages (images, videos, audio, documents, stickers) - but not view-once
-        else if (msgContent?.imageMessage || msgContent?.videoMessage || 
-            msgContent?.audioMessage || msgContent?.documentMessage || 
-            msgContent?.stickerMessage) {
-          await account.stealthLogger.cacheMediaMessage(message, client, senderName, groupName);
+        if (!isViewOnceMedia && !msgContent?.viewOnceMessage && !msgContent?.viewOnceMessageV2 && 
+            !msgContent?.viewOnceMessageV2Extension) {
+          if (msgContent?.imageMessage || msgContent?.videoMessage || 
+              msgContent?.audioMessage || msgContent?.documentMessage || 
+              msgContent?.stickerMessage) {
+            await account.stealthLogger.cacheMediaMessage(message, client, senderName, groupName);
+          }
         }
 
         // Handle ephemeral messages
