@@ -30,7 +30,7 @@ class TMDBService {
     const codePoints = isoCode
       .toUpperCase()
       .split('')
-      .map(char => 127397 + char.charCodeAt());
+      .map(char => 0x1F1E6 - 65 + char.charCodeAt());
     return String.fromCodePoint(...codePoints);
   }
 

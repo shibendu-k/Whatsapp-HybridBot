@@ -215,7 +215,7 @@ class CommandRouter {
       caption += `🌌 *Part of:* ${details.collectionInfo.name}\n\n`;
     }
     
-    // Top 5 actors horizontally with emojis
+    // Top 5 actors displayed vertically
     if (details.cast && details.cast.length > 0) {
       caption += `👥 *Cast:*\n`;
       caption += details.cast.map((actor, i) => `   ${i + 1}. ${actor}`).join('\n');
