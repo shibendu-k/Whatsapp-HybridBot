@@ -5,7 +5,7 @@ const BaileysClient = require('./baileys-client');
 const StealthLoggerService = require('./services/stealth-logger');
 const TMDBService = require('./services/tmdb');
 const CommandRouter = require('./services/command-router');
-const { isGroupChat, getPhoneFromJid, getMessageContent } = require('./utils/helpers');
+const { isGroupChat, getPhoneFromJid, getMessageContent, getSenderName } = require('./utils/helpers');
 
 class AccountManager {
   constructor() {
@@ -145,26 +145,33 @@ class AccountManager {
                            msgContent?.viewOnceMessageV2Extension || isViewOnceMedia;
 
         if (isViewOnce) {
-          // Get sender info for view-once messages
-          let viewOnceSenderName = '';
+          // Get sender info for view-once messages using pushName first
+          const viewOnceSenderInfo = await getSenderName(message, client);
+          let viewOnceSenderName = viewOnceSenderInfo.name;
           let viewOnceGroupName = null;
-          let viewOnceSenderJid = remoteJid;
+          let viewOnceSenderJid = viewOnceSenderInfo.senderId;
           
           if (remoteJid === 'status@broadcast') {
             viewOnceSenderJid = participant || remoteJid;
-            viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
             viewOnceGroupName = 'Status Update';
+            if (!viewOnceSenderName || viewOnceSenderName === 'Unknown') {
+              viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
+            }
           } else if (isGroupChat(remoteJid)) {
             const groupMetadata = await client.getGroupMetadata(remoteJid);
             viewOnceGroupName = groupMetadata?.subject || 'Unknown Group';
             viewOnceSenderJid = participant || remoteJid;
-            viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
+            if (!viewOnceSenderName || viewOnceSenderName === 'Unknown') {
+              viewOnceSenderName = await client.getContactName(viewOnceSenderJid);
+            }
           } else {
             viewOnceSenderJid = remoteJid;
-            viewOnceSenderName = await client.getContactName(remoteJid);
+            if (!viewOnceSenderName || viewOnceSenderName === 'Unknown') {
+              viewOnceSenderName = await client.getContactName(remoteJid);
+            }
           }
           
-          // If we didn't get a good contact name (it's empty, contains @, or is 'status'), 
+          // If we still didn't get a good contact name (it's empty, contains @, or is 'status'), 
           // use the raw phone number. The masking will happen only in vault message's ID field.
           if (!viewOnceSenderName || viewOnceSenderName.includes('@') || viewOnceSenderName === 'status') {
             const phone = getPhoneFromJid(viewOnceSenderJid);
@@ -184,16 +191,23 @@ class AccountManager {
       // Skip own messages for most processing
       if (fromMe) return;
 
-      // Get sender info - handle different chat types
-      let senderName = '';
+      // Get sender info using pushName from the message (best source)
+      // and handle different chat types
       let groupName = null;
-      let actualSenderJid = remoteJid; // Default to remoteJid for private chats
+      
+      // Get sender name using the new getSenderName helper which prioritizes pushName
+      const senderInfo = await getSenderName(message, client);
+      let senderName = senderInfo.name;
+      let actualSenderJid = senderInfo.senderId;
 
       // Handle status broadcasts - status@broadcast with participant
       if (remoteJid === 'status@broadcast') {
         actualSenderJid = participant || remoteJid;
-        senderName = await client.getContactName(actualSenderJid);
         groupName = 'Status Update';
+        // Override name if we got a better one from pushName
+        if (!senderName || senderName === 'Unknown') {
+          senderName = await client.getContactName(actualSenderJid);
+        }
       }
       // Check if group chat
       else if (isGroupChat(remoteJid)) {
@@ -202,15 +216,21 @@ class AccountManager {
         
         // Get actual sender in group - participant contains the sender
         actualSenderJid = participant || remoteJid;
-        senderName = await client.getContactName(actualSenderJid);
+        // Override name if we got a better one from pushName
+        if (!senderName || senderName === 'Unknown') {
+          senderName = await client.getContactName(actualSenderJid);
+        }
       } 
       // Private DM - use remoteJid directly
       else {
         actualSenderJid = remoteJid;
-        senderName = await client.getContactName(remoteJid);
+        // Override name if we got a better one from pushName
+        if (!senderName || senderName === 'Unknown') {
+          senderName = await client.getContactName(remoteJid);
+        }
       }
 
-      // If we didn't get a good contact name (it's empty, contains @, or is 'status'), 
+      // If we still didn't get a good contact name (it's empty, contains @, or is 'status'), 
       // use the raw phone number. The masking will happen only in vault message's ID field.
       if (!senderName || senderName.includes('@') || senderName === 'status') {
         const phone = getPhoneFromJid(actualSenderJid);
