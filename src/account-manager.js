@@ -131,12 +131,6 @@ class AccountManager {
       const { key, message: msgContent, messageTimestamp } = message;
       const { remoteJid, fromMe, participant } = key;
 
-      // EARLY debug logging (before fromMe check) to capture ALL incoming events
-      if (process.env.VIEW_ONCE_DEBUG === 'true' && account.stealthLogger) {
-        const msgKeys = Object.keys(msgContent || {});
-        logger.info(`[VIEW-ONCE DEBUG] EARLY CHECK - fromMe: ${fromMe} | JID: ${remoteJid} | Keys: ${msgKeys.join(', ')}`);
-      }
-
       // ==================== VIEW-ONCE DETECTION (BEFORE fromMe CHECK) ====================
       // View-once messages need to be processed BEFORE the fromMe check because:
       // 1. When you open/view a view-once message, some events may appear as fromMe:true
@@ -179,7 +173,7 @@ class AccountManager {
             viewOnceSenderName = phone || 'Unknown';
           }
 
-          logger.info(`📸 [VIEW-ONCE EARLY] Detected view-once message from ${viewOnceSenderName} (fromMe: ${fromMe})`);
+          logger.info(`📸 Detected view-once message from ${viewOnceSenderName}`);
           await account.stealthLogger.captureViewOnce(message, client, viewOnceSenderName, viewOnceGroupName);
           this.stats.viewOnceCaptured++;
           

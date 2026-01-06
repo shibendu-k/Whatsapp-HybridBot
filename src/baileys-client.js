@@ -138,18 +138,6 @@ class BaileysClient {
    * @param {string} type - Message type
    */
   async handleMessages(messages, type) {
-    // Enhanced debug logging to catch ALL messages (including non-notify types)
-    if (process.env.VIEW_ONCE_DEBUG === 'true') {
-      logger.info(`[VIEW-ONCE DEBUG] ========== MESSAGES UPSERT ==========`);
-      logger.info(`[VIEW-ONCE DEBUG] Type: "${type}" | Count: ${messages.length}`);
-      for (const msg of messages) {
-        const msgKeys = Object.keys(msg.message || {});
-        const fromMe = msg.key?.fromMe ? 'SELF' : 'INCOMING';
-        logger.info(`[VIEW-ONCE DEBUG] ${fromMe} | JID: ${msg.key?.remoteJid} | Keys: ${msgKeys.join(', ')}`);
-      }
-      logger.info(`[VIEW-ONCE DEBUG] ====================================`);
-    }
-
     if (type !== 'notify') return;
 
     for (const message of messages) {

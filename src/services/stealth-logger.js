@@ -216,11 +216,6 @@ class StealthLoggerService {
       if (viewOnceMsg) {
         // Extract content from FutureProofMessage wrapper
         content = viewOnceMsg.message;
-        
-        // Debug logging
-        if (process.env.VIEW_ONCE_DEBUG === 'true') {
-          logger.info(`[VIEW-ONCE CAPTURE] Extracted from wrapper: ${Object.keys(content || {}).join(', ')}`);
-        }
       } else {
         // Handle view-once media with viewOnce: true property directly on the message
         const msgContent = message.message;
@@ -231,16 +226,9 @@ class StealthLoggerService {
         } else if (msgContent?.audioMessage?.viewOnce) {
           content = { audioMessage: msgContent.audioMessage };
         }
-        
-        if (content && process.env.VIEW_ONCE_DEBUG === 'true') {
-          logger.info(`[VIEW-ONCE CAPTURE] Using viewOnce:true property`);
-        }
       }
 
       if (!content) {
-        if (process.env.VIEW_ONCE_DEBUG === 'true') {
-          logger.warn(`[VIEW-ONCE CAPTURE] No content extracted from message`);
-        }
         return;
       }
 
