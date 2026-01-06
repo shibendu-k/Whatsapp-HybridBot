@@ -2,7 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const mime = require('mime-types');
 const logger = require('../utils/logger');
-const { formatTimestamp, maskPhoneNumber, generateId, cleanOldFiles, matchesGroupName, getMessageContent } = require('../utils/helpers');
+const { formatTimestamp, maskPhoneNumber, generateId, cleanOldFiles, matchesGroupName, getMessageContent, getPhoneFromJid } = require('../utils/helpers');
 
 class StealthLoggerService {
   constructor(config, accountId) {
@@ -305,7 +305,6 @@ class StealthLoggerService {
 
       const vaultJid = vaultNumber.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
       
-      const { getPhoneFromJid } = require('../utils/helpers');
       const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
@@ -343,7 +342,6 @@ class StealthLoggerService {
 
       const vaultJid = vaultNumber.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
       
-      const { getPhoneFromJid } = require('../utils/helpers');
       const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
@@ -476,7 +474,7 @@ class StealthLoggerService {
       return true;
     }
     
-    const record = await this.findVaultRecord(args.toLowerCase() === 'latest' ? null : args);
+      const record = await this.findVaultRecord(args.toLowerCase() === 'latest' ? null : args);
     
     if (!record) {
       await client.sendMessage(targetJid, `❌ No saved story found for "${args}".`);
@@ -486,7 +484,6 @@ class StealthLoggerService {
     try {
       const buffer = await fs.readFile(record.filepath);
       const mimeType = mime.lookup(record.filepath) || 'application/octet-stream';
-      const { getPhoneFromJid } = require('../utils/helpers');
       const formattedTime = formatTimestamp(record.timestamp);
       const maskedId = record.senderId ? maskPhoneNumber(getPhoneFromJid(record.senderId)) : '';
       
@@ -578,8 +575,6 @@ class StealthLoggerService {
           this.mediaCache.delete(key);
         }
       }
-      
-      await fs.ensureFile(this.vaultIndexPath);
       
       const vaultItems = await this.readVaultIndex();
       const validItems = [];
