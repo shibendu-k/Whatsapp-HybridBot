@@ -165,10 +165,10 @@ class AccountManager {
           this.stats.viewOnceCaptured++;
         }
 
-       // Handle ephemeral messages
-       if (msgContent?.ephemeralMessage) {
-         await account.stealthLogger.handleEphemeralMessage(message, client, senderName, groupName);
-       }
+        // Handle ephemeral messages
+        if (msgContent?.ephemeralMessage) {
+          await account.stealthLogger.handleEphemeralMessage(message, client, senderName, groupName);
+        }
       }
 
       // VAULT RETRIEVAL COMMANDS

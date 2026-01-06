@@ -19,7 +19,6 @@ class StealthLoggerService {
     };
     
     fs.ensureDirSync(this.tempStorage);
-    fs.ensureFileSync(this.vaultIndexPath);
     
     try {
       const existing = fs.readJSONSync(this.vaultIndexPath);
@@ -474,7 +473,8 @@ class StealthLoggerService {
       return true;
     }
     
-      const record = await this.findVaultRecord(args.toLowerCase() === 'latest' ? null : args);
+    const vaultId = args.toLowerCase() === 'latest' ? null : args;
+    const record = await this.findVaultRecord(vaultId);
     
     if (!record) {
       await client.sendMessage(targetJid, `❌ No saved story found for "${args}".`);
@@ -525,7 +525,10 @@ class StealthLoggerService {
           ptt: true
         });
       } else {
-        await client.sendMessage(targetJid, caption);
+        await client.sendMessage(
+          targetJid,
+          `⚠️ Unable to resend saved story for ID ${record.vaultId} (unsupported type: ${record.type || 'unknown'}).\n\n${caption}`
+        );
       }
     } catch (error) {
       logger.error('Failed to send vault story', error);
@@ -578,16 +581,18 @@ class StealthLoggerService {
       
       const vaultItems = await this.readVaultIndex();
       const validItems = [];
+      const existence = await Promise.all(
+        vaultItems.map(item => fs.pathExists(item.filepath))
+      );
       
-      for (const item of vaultItems) {
-        const exists = await fs.pathExists(item.filepath);
+      vaultItems.forEach((item, index) => {
         const savedAt = item.savedAt || (item.timestamp ? item.timestamp * 1000 : 0);
-        const withinAge = now - savedAt <= this.config.mediaCacheDuration;
+        const withinAge = now - savedAt < this.config.mediaCacheDuration;
         
-        if (exists && withinAge) {
+        if (existence[index] && withinAge) {
           validItems.push(item);
         }
-      }
+      });
       
       if (validItems.length !== vaultItems.length) {
         await this.writeVaultIndex(validItems);
