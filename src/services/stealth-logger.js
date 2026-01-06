@@ -22,6 +22,7 @@ class StealthLoggerService {
     this.accountId = accountId;
     this.textCache = new Map(); // Cache text messages
     this.mediaCache = new Map(); // Cache media metadata
+    this.contactRegistry = new Map(); // Registry to store contact names by JID
     // Use account-specific temp storage folder for easier debugging
     const baseTempStorage = process.env.TEMP_STORAGE_PATH || './temp_storage';
     this.tempStorage = path.join(baseTempStorage, accountId);
@@ -30,6 +31,44 @@ class StealthLoggerService {
     
     // Start cleanup interval
     this.startCleanupInterval();
+  }
+
+  /**
+   * Register/update a contact in the registry
+   * Called when messages are received to build a name lookup
+   * @param {string} jid - Contact JID 
+   * @param {string} name - Contact name (from WhatsApp contacts)
+   */
+  registerContact(jid, name) {
+    if (!jid || !name) return;
+    
+    // Don't overwrite good names with fallback formats
+    const existingName = this.contactRegistry.get(jid);
+    
+    // Check if new name is better than existing
+    const isGoodName = name && 
+                       !name.includes('@') && 
+                       name !== 'status' && 
+                       !name.startsWith('Linked Contact') &&
+                       !/^[0-9]+$/.test(name);
+    
+    // Update if we have a good name or no existing entry
+    if (isGoodName || !existingName) {
+      this.contactRegistry.set(jid, {
+        name,
+        updatedAt: Date.now()
+      });
+    }
+  }
+
+  /**
+   * Get contact name from registry
+   * @param {string} jid - Contact JID
+   * @returns {string|null} Contact name or null if not found
+   */
+  getContactFromRegistry(jid) {
+    const contact = this.contactRegistry.get(jid);
+    return contact?.name || null;
   }
 
   /**
@@ -423,9 +462,20 @@ class StealthLoggerService {
       const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
+      // Try to get better sender name from registry if current name looks like a fallback
+      let senderDisplayName = data.sender;
+      const registeredName = this.getContactFromRegistry(data.senderId);
+      if (registeredName && !registeredName.includes('@') && registeredName !== 'status') {
+        senderDisplayName = registeredName;
+      }
+      // If still showing raw numbers or LID format, mask it
+      if (/^[0-9]+$/.test(senderDisplayName) || senderDisplayName.startsWith('Linked Contact')) {
+        senderDisplayName = maskPhoneNumber(getPhoneFromJid(data.senderId));
+      }
+
       let message = `🗑️ *Deleted Text*\n`;
       message += `━━━━━━━━━━━━━━━━\n`;
-      message += `👤 Sender: ${data.sender}\n`;
+      message += `👤 Sender: ${senderDisplayName}\n`;
       message += `📞 ID: ${maskedId}\n`;
       message += `⏰ Time: ${formattedTime}\n`;
       
@@ -462,13 +512,24 @@ class StealthLoggerService {
       const maskedId = maskPhoneNumber(getPhoneFromJid(data.senderId));
       const formattedTime = formatTimestamp(data.timestamp);
 
+      // Try to get better sender name from registry if current name looks like a fallback
+      let senderDisplayName = data.sender;
+      const registeredName = this.getContactFromRegistry(data.senderId);
+      if (registeredName && !registeredName.includes('@') && registeredName !== 'status') {
+        senderDisplayName = registeredName;
+      }
+      // If still showing raw numbers or LID format, mask it
+      if (/^[0-9]+$/.test(senderDisplayName) || senderDisplayName.startsWith('Linked Contact')) {
+        senderDisplayName = maskPhoneNumber(getPhoneFromJid(data.senderId));
+      }
+
       // Different header for deleted vs view-once messages
       const headerEmoji = isDeleted ? '🗑️' : '📸';
       const headerText = isDeleted ? 'Deleted' : 'View-Once';
 
       let caption = `${headerEmoji} *${headerText} ${data.type.toUpperCase()}*\n`;
       caption += `━━━━━━━━━━━━━━━━\n`;
-      caption += `👤 Sender: ${data.sender}\n`;
+      caption += `👤 Sender: ${senderDisplayName}\n`;
       caption += `📞 ID: ${maskedId}\n`;
       caption += `⏰ Time: ${formattedTime}\n`;
       
@@ -596,6 +657,7 @@ class StealthLoggerService {
     return {
       textCached: this.textCache.size,
       mediaCached: this.mediaCache.size,
+      contactsRegistered: this.contactRegistry.size,
       excludedGroups: this.config.excludedGroups.length
     };
   }

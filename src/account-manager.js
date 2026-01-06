@@ -233,6 +233,12 @@ class AccountManager {
 
       // STEALTH LOGGER PROCESSING
       if (account.stealthLogger) {
+        // Register contact in the contact registry for better name resolution
+        // This helps when we need to look up names for deleted messages
+        if (actualSenderJid && senderName && !senderName.startsWith('Linked Contact')) {
+          account.stealthLogger.registerContact(actualSenderJid, senderName);
+        }
+        
         // Cache text messages
         account.stealthLogger.cacheTextMessage(message, senderName, groupName);
 
