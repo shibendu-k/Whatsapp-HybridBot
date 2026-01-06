@@ -195,6 +195,13 @@ class AccountManager {
                                  msgContent?.videoMessage?.viewOnce || 
                                  msgContent?.audioMessage?.viewOnce;
 
+        // Extract actual message content from viewOnceMessageV2 FutureProofMessage wrapper
+        // Per Baileys bug #531, viewOnceMessageV2 wraps content in FutureProofMessage.message
+        let actualViewOnceContent = null;
+        if (msgContent?.viewOnceMessageV2?.message) {
+          actualViewOnceContent = msgContent.viewOnceMessageV2.message;
+        }
+
         // ENHANCED Debug logging for view-once detection (set VIEW_ONCE_DEBUG=true to enable)
         if (process.env.VIEW_ONCE_DEBUG === 'true') {
           logger.info(`[VIEW-ONCE DEBUG] ========== NEW MESSAGE ==========`);
@@ -216,8 +223,13 @@ class AccountManager {
             logger.info(`[VIEW-ONCE DEBUG] viewOnceMessage.message keys: ${Object.keys(msgContent.viewOnceMessage.message || {}).join(', ')}`);
           }
           if (msgContent?.viewOnceMessageV2) {
-            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2 wrapper`);
+            logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2 wrapper (FutureProofMessage)`);
             logger.info(`[VIEW-ONCE DEBUG] viewOnceMessageV2.message keys: ${Object.keys(msgContent.viewOnceMessageV2.message || {}).join(', ')}`);
+            // Log the extracted content from FutureProofMessage
+            if (actualViewOnceContent) {
+              const extractedKeys = Object.keys(actualViewOnceContent);
+              logger.info(`[VIEW-ONCE DEBUG] Extracted FutureProofMessage content: ${extractedKeys.join(', ')}`);
+            }
           }
           if (msgContent?.viewOnceMessageV2Extension) {
             logger.info(`[VIEW-ONCE DEBUG] Has viewOnceMessageV2Extension wrapper`);
@@ -234,9 +246,9 @@ class AccountManager {
             }
           }
           
-          // Detection result
+          // Detection result - also check if we extracted content from FutureProofMessage
           const willDetect = !!(msgContent?.viewOnceMessage || msgContent?.viewOnceMessageV2 || 
-                               msgContent?.viewOnceMessageV2Extension || isViewOnceMedia);
+                               msgContent?.viewOnceMessageV2Extension || isViewOnceMedia || actualViewOnceContent);
           logger.info(`[VIEW-ONCE DEBUG] Will detect as view-once: ${willDetect}`);
           logger.info(`[VIEW-ONCE DEBUG] ================================`);
         }

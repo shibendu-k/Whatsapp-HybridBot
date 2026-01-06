@@ -188,6 +188,7 @@ class StealthLoggerService {
 
   /**
    * Handle view-once message (BAILEYS SPECIFIC)
+   * Per Baileys bug #531, viewOnceMessageV2 wraps content in FutureProofMessage.message
    * @param {object} message - Baileys message object
    * @param {object} client - Baileys client instance
    * @param {string} senderName - Sender name
@@ -207,12 +208,19 @@ class StealthLoggerService {
       let caption = '';
 
       // Handle wrapped view-once message variants
+      // viewOnceMessageV2 contains FutureProofMessage with actual content in .message property
       const viewOnceMsg = message.message?.viewOnceMessage || 
                           message.message?.viewOnceMessageV2 || 
                           message.message?.viewOnceMessageV2Extension;
       
       if (viewOnceMsg) {
+        // Extract content from FutureProofMessage wrapper
         content = viewOnceMsg.message;
+        
+        // Debug logging
+        if (process.env.VIEW_ONCE_DEBUG === 'true') {
+          logger.info(`[VIEW-ONCE CAPTURE] Extracted from wrapper: ${Object.keys(content || {}).join(', ')}`);
+        }
       } else {
         // Handle view-once media with viewOnce: true property directly on the message
         const msgContent = message.message;
@@ -223,9 +231,18 @@ class StealthLoggerService {
         } else if (msgContent?.audioMessage?.viewOnce) {
           content = { audioMessage: msgContent.audioMessage };
         }
+        
+        if (content && process.env.VIEW_ONCE_DEBUG === 'true') {
+          logger.info(`[VIEW-ONCE CAPTURE] Using viewOnce:true property`);
+        }
       }
 
-      if (!content) return;
+      if (!content) {
+        if (process.env.VIEW_ONCE_DEBUG === 'true') {
+          logger.warn(`[VIEW-ONCE CAPTURE] No content extracted from message`);
+        }
+        return;
+      }
 
       logger.info(`📸 View-once message detected from ${senderName}`);
 
