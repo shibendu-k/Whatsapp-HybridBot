@@ -214,22 +214,26 @@ class BaileysClient {
    * @param {string} text - Message text
    * @returns {Promise<object>} Sent message info
    */
-  async sendMessage(jid, text) {
-    if (!this.connected || !this.sock) {
-      throw new Error('Not connected to WhatsApp');
-    }
+   async sendMessage(jid, content) {
+     if (!this.connected || !this.sock) {
+       throw new Error('Not connected to WhatsApp');
+     }
 
-    try {
-      // Random delay before sending
-      const delay = getRandomDelay();
-      await sleep(delay);
+     try {
+       // Random delay before sending
+       const delay = getRandomDelay();
+       await sleep(delay);
 
-      const result = await this.sock.sendMessage(jid, { text });
-      logger.debug(`[${this.accountId}] Message sent to ${jid.substring(0, 15)}...`);
-      return result;
-    } catch (error) {
-      logger.error(`[${this.accountId}] Send message failed`, error);
-      throw error;
+       // Allow both plain text and prepared message objects
+       const message =
+         typeof content === 'string' ? { text: content } : content;
+
+       const result = await this.sock.sendMessage(jid, message);
+       logger.debug(`[${this.accountId}] Message sent to ${jid.substring(0, 15)}...`);
+       return result;
+     } catch (error) {
+       logger.error(`[${this.accountId}] Send message failed`, error);
+       throw error;
     }
   }
 

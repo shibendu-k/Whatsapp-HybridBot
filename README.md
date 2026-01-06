@@ -94,6 +94,15 @@ In any WhatsApp chat (or configured groups):
 ... (up to 5)
 ```
 
+### Vault/Story Retrieval Commands
+
+Use the vault command to resend captured stories or view-once media that were forwarded to your vault number. The vault ID is shown in the vault notification message.
+
+```
+!vault <vaultId>   # Send a specific saved story/media to the current chat
+!vault latest      # Quickly resend the most recently saved story
+```
+
 ### Account Management
 
 ```bash

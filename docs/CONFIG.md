@@ -186,6 +186,12 @@ Maximum number of text messages to cache.
 - Oldest messages removed when limit reached
 - Prevents unlimited memory growth
 
+#### `stealthLogger.vaultCommands` (object)
+Configuration for retrieving saved stories/media by command.
+- `enabled`: Enable/disable the command listener (default: `true`)
+- `prefix`: Command prefix to trigger retrieval (default: `!vault`)
+- `maxItems`: Maximum number of saved vault entries to keep indexed (default: `200`)
+
 ### Global Settings (config/default.json)
 
 Location: `/config/default.json`

@@ -23,7 +23,12 @@
           "statusCacheDuration": 86400000,
           "mediaCacheDuration": 244800000,
           "maxFileSize": 157286400,
-          "maxTextCache": 5000
+          "maxTextCache": 5000,
+          "vaultCommands": {
+            "enabled": true,
+            "prefix": "!vault",
+            "maxItems": 200
+          }
         }
       }
     }

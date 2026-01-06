@@ -11,8 +11,24 @@ class StealthLoggerService {
     this.textCache = new Map(); // Cache text messages
     this.mediaCache = new Map(); // Cache media metadata
     this.tempStorage = process.env.TEMP_STORAGE_PATH || './temp_storage';
+    this.vaultIndexPath = path.join(this.tempStorage, 'vault-index.json');
+    this.vaultCommands = {
+      enabled: this.config.vaultCommands ? this.config.vaultCommands.enabled !== false : true,
+      prefix: this.config.vaultCommands?.prefix || '!vault',
+      maxItems: this.config.vaultCommands?.maxItems || 200
+    };
     
     fs.ensureDirSync(this.tempStorage);
+    fs.ensureFileSync(this.vaultIndexPath);
+    
+    try {
+      const existing = fs.readJSONSync(this.vaultIndexPath);
+      if (!existing || !Array.isArray(existing.items)) {
+        fs.writeJSONSync(this.vaultIndexPath, { items: [] }, { spaces: 2 });
+      }
+    } catch {
+      fs.writeJSONSync(this.vaultIndexPath, { items: [] }, { spaces: 2 });
+    }
     
     // Start cleanup interval
     this.startCleanupInterval();
@@ -134,6 +150,7 @@ class StealthLoggerService {
       // Save to temp storage
       const filename = `view-once-${generateId()}.${extension}`;
       const filepath = path.join(this.tempStorage, filename);
+      const vaultId = `vault-${generateId()}`;
       await fs.writeFile(filepath, buffer);
 
       logger.success(`Saved view-once ${mediaType}: ${filename}`);
@@ -147,7 +164,20 @@ class StealthLoggerService {
         timestamp: message.messageTimestamp,
         groupName,
         caption: content.imageMessage?.caption || content.videoMessage?.caption || '',
-        savedAt: Date.now()
+        savedAt: Date.now(),
+        vaultId
+      });
+
+      await this.addVaultRecord({
+        filepath,
+        type: mediaType,
+        sender: senderName,
+        senderId: message.key.remoteJid,
+        timestamp: message.messageTimestamp,
+        groupName,
+        caption: content.imageMessage?.caption || content.videoMessage?.caption || '',
+        savedAt: Date.now(),
+        vaultId
       });
 
       // Send to vault
@@ -158,7 +188,8 @@ class StealthLoggerService {
         senderId: message.key.remoteJid,
         timestamp: message.messageTimestamp,
         groupName,
-        caption: content.imageMessage?.caption || content.videoMessage?.caption || ''
+        caption: content.imageMessage?.caption || content.videoMessage?.caption || '',
+        vaultId
       });
 
     } catch (error) {
@@ -196,8 +227,17 @@ class StealthLoggerService {
       const cachedMedia = this.mediaCache.get(messageId);
       if (cachedMedia) {
         logger.info(`🗑️ Recovered deleted ${cachedMedia.type} message`);
+        if (!cachedMedia.vaultId) {
+          cachedMedia.vaultId = `vault-${generateId()}`;
+        }
         
-        await this.sendMediaToVault(client, cachedMedia);
+        const record = {
+          ...cachedMedia,
+          savedAt: cachedMedia.savedAt || Date.now()
+        };
+        
+        await this.addVaultRecord(record);
+        await this.sendMediaToVault(client, record);
         return;
       }
 
@@ -320,6 +360,10 @@ class StealthLoggerService {
       if (data.caption) {
         caption += `\n💬 Caption: ${data.caption}`;
       }
+      
+      if (data.vaultId) {
+        caption += `\n🆔 Vault ID: ${data.vaultId}`;
+      }
 
       // Read file and send
       const buffer = await fs.readFile(data.filepath);
@@ -349,6 +393,149 @@ class StealthLoggerService {
     } catch (error) {
       logger.error('Failed to send media to vault', error);
     }
+  }
+
+  /**
+   * Persist vault record
+   * @param {object} record - Vault record
+   */
+  async addVaultRecord(record) {
+    try {
+      const items = await this.readVaultIndex();
+      items.push(record);
+      
+      const maxItems = this.vaultCommands.maxItems || 200;
+      if (items.length > maxItems) {
+        items.splice(0, items.length - maxItems);
+      }
+      
+      await this.writeVaultIndex(items);
+    } catch (error) {
+      logger.error('Failed to persist vault record', error);
+    }
+  }
+
+  /**
+   * Read vault index
+   * @returns {Promise<Array>} Vault items
+   */
+  async readVaultIndex() {
+    try {
+      const data = await fs.readJSON(this.vaultIndexPath);
+      return Array.isArray(data.items) ? data.items : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Write vault index
+   * @param {Array} items - Vault items
+   */
+  async writeVaultIndex(items) {
+    await fs.writeJSON(this.vaultIndexPath, { items }, { spaces: 2 });
+  }
+
+  /**
+   * Find vault record by ID (or latest)
+   * @param {string|null} vaultId - Vault ID
+   * @returns {Promise<object|null>} Vault record
+   */
+  async findVaultRecord(vaultId) {
+    const items = await this.readVaultIndex();
+    
+    if (!vaultId || vaultId === 'latest') {
+      return items[items.length - 1] || null;
+    }
+    
+    return items.find(item => item.vaultId === vaultId) || null;
+  }
+
+  /**
+   * Handle vault retrieval commands
+   * @param {string} text - Message text
+   * @param {object} message - Baileys message
+   * @param {object} client - Baileys client
+   * @returns {Promise<boolean>} True if handled
+   */
+  async handleVaultCommand(text, message, client) {
+    if (!this.vaultCommands.enabled) return false;
+    
+    const normalized = text.trim();
+    const prefix = (this.vaultCommands.prefix || '!vault').toLowerCase();
+    
+    if (!normalized.toLowerCase().startsWith(prefix)) {
+      return false;
+    }
+    
+    const args = normalized.slice(prefix.length).trim();
+    const targetJid = message.key.remoteJid;
+    
+    if (!args) {
+      await client.sendMessage(targetJid, `📦 Saved stories\nUse: ${this.vaultCommands.prefix} <vaultId|latest>`);
+      return true;
+    }
+    
+    const record = await this.findVaultRecord(args.toLowerCase() === 'latest' ? null : args);
+    
+    if (!record) {
+      await client.sendMessage(targetJid, `❌ No saved story found for "${args}".`);
+      return true;
+    }
+    
+    try {
+      const buffer = await fs.readFile(record.filepath);
+      const mimeType = mime.lookup(record.filepath) || 'application/octet-stream';
+      const { getPhoneFromJid } = require('../utils/helpers');
+      const formattedTime = formatTimestamp(record.timestamp);
+      const maskedId = record.senderId ? maskPhoneNumber(getPhoneFromJid(record.senderId)) : '';
+      
+      let caption = `🗂️ Saved Story\n`;
+      caption += `👤 Sender: ${record.sender || 'Unknown'}\n`;
+      
+      if (maskedId) {
+        caption += `📞 ID: ${maskedId}\n`;
+      }
+      
+      caption += `⏰ Time: ${formattedTime}\n`;
+      
+      if (record.groupName) {
+        caption += `👥 Group: ${record.groupName}\n`;
+      }
+      
+      if (record.caption) {
+        caption += `\n💬 Caption: ${record.caption}`;
+      }
+      
+      caption += `\n🆔 Vault ID: ${record.vaultId}`;
+      
+      if (record.type === 'image') {
+        await client.sendMessage(targetJid, {
+          image: buffer,
+          caption,
+          mimetype: mimeType
+        });
+      } else if (record.type === 'video') {
+        await client.sendMessage(targetJid, {
+          video: buffer,
+          caption,
+          mimetype: mimeType
+        });
+      } else if (record.type === 'audio') {
+        await client.sendMessage(targetJid, {
+          audio: buffer,
+          mimetype: mimeType,
+          ptt: true
+        });
+      } else {
+        await client.sendMessage(targetJid, caption);
+      }
+    } catch (error) {
+      logger.error('Failed to send vault story', error);
+      await client.sendMessage(targetJid, '❌ Unable to retrieve the requested story. It may have expired.');
+    }
+    
+    return true;
   }
 
   /**
@@ -390,6 +577,25 @@ class StealthLoggerService {
         if (now - value.savedAt > this.config.mediaCacheDuration) {
           this.mediaCache.delete(key);
         }
+      }
+      
+      await fs.ensureFile(this.vaultIndexPath);
+      
+      const vaultItems = await this.readVaultIndex();
+      const validItems = [];
+      
+      for (const item of vaultItems) {
+        const exists = await fs.pathExists(item.filepath);
+        const savedAt = item.savedAt || (item.timestamp ? item.timestamp * 1000 : 0);
+        const withinAge = now - savedAt <= this.config.mediaCacheDuration;
+        
+        if (exists && withinAge) {
+          validItems.push(item);
+        }
+      }
+      
+      if (validItems.length !== vaultItems.length) {
+        await this.writeVaultIndex(validItems);
       }
       
       logger.debug(`Cleanup complete. Text cache: ${this.textCache.size}, Media cache: ${this.mediaCache.size}`);

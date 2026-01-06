@@ -165,9 +165,18 @@ class AccountManager {
           this.stats.viewOnceCaptured++;
         }
 
-        // Handle ephemeral messages
-        if (msgContent?.ephemeralMessage) {
-          await account.stealthLogger.handleEphemeralMessage(message, client, senderName, groupName);
+       // Handle ephemeral messages
+       if (msgContent?.ephemeralMessage) {
+         await account.stealthLogger.handleEphemeralMessage(message, client, senderName, groupName);
+       }
+      }
+
+      // VAULT RETRIEVAL COMMANDS
+      const text = getMessageContent(message.message);
+      if (account.stealthLogger && text) {
+        const handled = await account.stealthLogger.handleVaultCommand(text, message, client);
+        if (handled) {
+          return;
         }
       }
 
