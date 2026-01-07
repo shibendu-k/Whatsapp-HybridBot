@@ -224,7 +224,7 @@ class BaileysClient {
     } catch (error) {
       // Check if this is a known transient error that can be safely ignored
       // Use case-insensitive regex matching for robustness across baileys versions
-      const errorMsg = error.message?.toLowerCase() || '';
+      const errorMsg = error.message || '';
       const isTransientError = TRANSIENT_ERROR_PATTERN.test(errorMsg);
       
       if (isTransientError) {

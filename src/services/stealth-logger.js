@@ -292,17 +292,19 @@ class StealthLoggerService {
    * @returns {boolean} True if key is valid
    */
   _isValidEncryptionKey(key) {
+    if (!key) return false; // Handle null/undefined
     return (Buffer.isBuffer(key) || key instanceof Uint8Array) && key.length > 0;
   }
 
   /**
-   * Check if URL is a non-empty string
+   * Check if URL is a non-empty string (excluding whitespace-only strings)
    * @private
    * @param {*} url - The URL to validate
    * @returns {boolean} True if URL is valid
    */
   _isValidUrl(url) {
-    return typeof url === 'string' && url.length > 0;
+    if (typeof url !== 'string') return false;
+    return url.trim().length > 0;
   }
 
   /**
