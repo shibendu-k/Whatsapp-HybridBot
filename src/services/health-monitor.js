@@ -720,6 +720,8 @@ class HealthMonitor {
       });
 
       server.on('error', (error) => {
+        // Clean up the server instance on error to prevent resource leaks
+        server.close();
         reject(error);
       });
     });
