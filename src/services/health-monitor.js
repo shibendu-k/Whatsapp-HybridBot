@@ -714,11 +714,12 @@ class HealthMonitor {
    */
   tryBindToPort(port) {
     return new Promise((resolve, reject) => {
-      this.server = this.app.listen(port, () => {
+      const server = this.app.listen(port, () => {
+        this.server = server; // Only assign to this.server on successful binding
         resolve();
       });
 
-      this.server.on('error', (error) => {
+      server.on('error', (error) => {
         reject(error);
       });
     });
