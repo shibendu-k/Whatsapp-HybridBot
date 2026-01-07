@@ -173,7 +173,6 @@ TMDB_API_KEY=your_api_key_here
 NODE_ENV=production
 LOG_LEVEL=info
 HEALTH_CHECK_PORT=8080
-HEALTH_CHECK_PORT_RETRIES=5  # Alternative ports to try if default is in use
 MAX_ACCOUNTS=10
 MASK_PHONE_NUMBERS=true
 ```
@@ -246,15 +245,13 @@ Each account can be configured independently:
 
 ## 📊 Monitoring
 
-Access the web dashboard at `http://localhost:8080/health` (or the next available port if 8080 is in use) to view:
+Access the web dashboard at `http://localhost:8080/health` to view:
 
 - System uptime and memory usage
 - Message processing statistics
 - Account connection status
 - Cache sizes and health
 - Error counts
-
-> **Note**: If port 8080 is already in use, the health monitor will automatically try alternative ports (8081, 8082, etc.). Check the console output for the actual port being used.
 
 ## 🐛 Troubleshooting
 

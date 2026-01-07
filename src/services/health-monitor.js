@@ -7,7 +7,6 @@ class HealthMonitor {
     this.accountManager = accountManager;
     this.app = express();
     this.port = parseInt(process.env.HEALTH_CHECK_PORT) || 8080;
-    this.maxPortRetries = parseInt(process.env.HEALTH_CHECK_PORT_RETRIES) || 5;
     this.startTime = Date.now();
     this.version = '3.2.0';
     
@@ -672,58 +671,27 @@ class HealthMonitor {
   }
 
   /**
-   * Start health check server with port retry logic
-   * @returns {Promise<void>}
+   * Start health check server
    */
-  async start() {
-    const originalPort = this.port;
-    let currentPort = originalPort;
-    let attempt = 0;
-
-    while (attempt <= this.maxPortRetries) {
-      try {
-        await this.tryBindToPort(currentPort);
-        this.port = currentPort;
-        logger.success(`Health check server running on http://localhost:${currentPort}`);
-        return;
-      } catch (error) {
-        if (error.code === 'EADDRINUSE') {
-          if (attempt < this.maxPortRetries) {
-            const nextPort = currentPort + 1;
-            logger.warn(`Port ${currentPort} is already in use, trying port ${nextPort}...`);
-            currentPort = nextPort;
-            attempt++;
-          } else {
-            logger.warn(`All ports ${originalPort}-${currentPort} are in use, health check server disabled`);
-            logger.warn('The bot will continue without health monitoring');
-            this.server = null;
-            return; // Don't throw - allow bot to continue without health monitoring
-          }
-        } else {
-          logger.error('Health check server error', error);
-          throw error;
-        }
-      }
-    }
-  }
-
-  /**
-   * Try to bind server to a specific port
-   * @param {number} port - Port to bind to
-   * @returns {Promise<void>}
-   */
-  tryBindToPort(port) {
+  start() {
     return new Promise((resolve, reject) => {
-      const server = this.app.listen(port, () => {
-        this.server = server; // Only assign to this.server on successful binding
-        resolve();
-      });
+      try {
+        this.server = this.app.listen(this.port, () => {
+          logger.success(`Health check server running on http://localhost:${this.port}`);
+          resolve();
+        });
 
-      server.on('error', (error) => {
-        // Clean up the server instance on error to prevent resource leaks
-        server.close();
+        this.server.on('error', (error) => {
+          if (error.code === 'EADDRINUSE') {
+            logger.error(`Port ${this.port} is already in use`);
+          } else {
+            logger.error('Health check server error', error);
+          }
+          reject(error);
+        });
+      } catch (error) {
         reject(error);
-      });
+      }
     });
   }
 
