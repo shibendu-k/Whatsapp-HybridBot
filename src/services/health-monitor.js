@@ -673,51 +673,54 @@ class HealthMonitor {
 
   /**
    * Start health check server with port retry logic
+   * @returns {Promise<void>}
    */
-  start() {
+  async start() {
     const originalPort = this.port;
-    return this.tryStartOnPort(originalPort, this.port, 0);
+    let currentPort = originalPort;
+    let attempt = 0;
+
+    while (attempt <= this.maxPortRetries) {
+      try {
+        await this.tryBindToPort(currentPort);
+        this.port = currentPort;
+        logger.success(`Health check server running on http://localhost:${currentPort}`);
+        return;
+      } catch (error) {
+        if (error.code === 'EADDRINUSE') {
+          if (attempt < this.maxPortRetries) {
+            const nextPort = currentPort + 1;
+            logger.warn(`Port ${currentPort} is already in use, trying port ${nextPort}...`);
+            currentPort = nextPort;
+            attempt++;
+          } else {
+            logger.warn(`All ports ${originalPort}-${currentPort} are in use, health check server disabled`);
+            logger.warn('The bot will continue without health monitoring');
+            this.server = null;
+            return; // Don't throw - allow bot to continue without health monitoring
+          }
+        } else {
+          logger.error('Health check server error', error);
+          throw error;
+        }
+      }
+    }
   }
 
   /**
-   * Try to start server on a specific port, with automatic port incrementing on failure
-   * @param {number} originalPort - The original configured port (for error messages)
-   * @param {number} port - Port to try
-   * @param {number} attempt - Current attempt number
+   * Try to bind server to a specific port
+   * @param {number} port - Port to bind to
    * @returns {Promise<void>}
    */
-  tryStartOnPort(originalPort, port, attempt) {
+  tryBindToPort(port) {
     return new Promise((resolve, reject) => {
-      try {
-        this.server = this.app.listen(port, () => {
-          this.port = port; // Update the port to the one that actually worked
-          logger.success(`Health check server running on http://localhost:${port}`);
-          resolve();
-        });
+      this.server = this.app.listen(port, () => {
+        resolve();
+      });
 
-        this.server.on('error', (error) => {
-          if (error.code === 'EADDRINUSE') {
-            if (attempt < this.maxPortRetries) {
-              const nextPort = port + 1;
-              logger.warn(`Port ${port} is already in use, trying port ${nextPort}...`);
-              // Use setImmediate to avoid potential stack buildup on many retries
-              setImmediate(() => {
-                this.tryStartOnPort(originalPort, nextPort, attempt + 1).then(resolve).catch(reject);
-              });
-            } else {
-              logger.warn(`All ports ${originalPort}-${port} are in use, health check server disabled`);
-              logger.warn('The bot will continue without health monitoring');
-              this.server = null;
-              resolve(); // Resolve without server - bot can still function
-            }
-          } else {
-            logger.error('Health check server error', error);
-            reject(error);
-          }
-        });
-      } catch (error) {
+      this.server.on('error', (error) => {
         reject(error);
-      }
+      });
     });
   }
 
