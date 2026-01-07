@@ -264,6 +264,25 @@ class StealthLoggerService {
   }
 
   /**
+   * Validate if media message has required keys for download
+   * @param {object} mediaMessage - Media message object
+   * @returns {boolean} True if media can be downloaded
+   */
+  isMediaDownloadable(mediaMessage) {
+    if (!mediaMessage) return false;
+    
+    // Check for required encryption keys
+    // Media needs either mediaKey (newer) or fileEncSha256 (older format)
+    const hasMediaKey = mediaMessage.mediaKey && mediaMessage.mediaKey.length > 0;
+    const hasFileEncSha = mediaMessage.fileEncSha256 && mediaMessage.fileEncSha256.length > 0;
+    
+    // Also check for URL (directPath or url)
+    const hasUrl = mediaMessage.directPath || mediaMessage.url;
+    
+    return (hasMediaKey || hasFileEncSha) && hasUrl;
+  }
+
+  /**
    * Cache media message (images, videos, audio, documents, stickers)
    * @param {object} message - Baileys message object
    * @param {object} client - Baileys client instance
@@ -320,6 +339,12 @@ class StealthLoggerService {
         mediaMessage = msgContent.stickerMessage;
       } else {
         return; // Not a media message
+      }
+
+      // Validate media is downloadable before attempting
+      if (!this.isMediaDownloadable(mediaMessage)) {
+        logger.debug(`[${client.accountId}] Skipping media with missing/empty encryption key`);
+        return;
       }
 
       logger.debug(`Caching ${mediaType} message from ${senderName}`);
@@ -418,20 +443,30 @@ class StealthLoggerService {
 
       logger.info(`📸 View-once message detected from ${senderName}`);
 
+      let mediaMessage = null;
       if (content.imageMessage) {
         mediaType = 'image';
         extension = 'jpg';
         caption = content.imageMessage.caption || '';
+        mediaMessage = content.imageMessage;
       } else if (content.videoMessage) {
         mediaType = 'video';
         extension = 'mp4';
         caption = content.videoMessage.caption || '';
+        mediaMessage = content.videoMessage;
       } else if (content.audioMessage) {
         mediaType = 'audio';
         extension = 'ogg';
+        mediaMessage = content.audioMessage;
       }
 
       if (!mediaType) return;
+
+      // Validate media is downloadable before attempting
+      if (!this.isMediaDownloadable(mediaMessage)) {
+        logger.debug(`[${client.accountId}] Skipping view-once with missing/empty encryption key`);
+        return;
+      }
 
       // Download media using Baileys' downloadMediaMessage
       const buffer = await client.downloadMediaMessage(

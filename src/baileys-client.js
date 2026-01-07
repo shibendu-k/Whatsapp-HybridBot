@@ -62,7 +62,10 @@ class BaileysClient {
         browser: ['WhatsApp Hybrid Bot', 'Chrome', '3.2.0'],
         syncFullHistory: false,
         markOnlineOnConnect: false,
-        defaultQueryTimeoutMs: undefined
+        defaultQueryTimeoutMs: undefined,
+        // Retry decryption failures (helps with multi-account session conflicts)
+        retryRequestDelayMs: 350,
+        maxMsgRetryCount: 3
       });
 
       // Store credentials on update
@@ -141,6 +144,12 @@ class BaileysClient {
     if (type !== 'notify') return;
 
     for (const message of messages) {
+      // Skip messages that failed to decrypt (common in multi-account setups)
+      if (message.messageStubType || !message.message) {
+        logger.debug(`[${this.accountId}] Skipping stub/empty message`);
+        continue;
+      }
+      
       // Queue message for processing
       this.messageQueue.push(message);
     }
@@ -207,7 +216,19 @@ class BaileysClient {
         reuploadRequest: this.sock.updateMediaMessage
       });
     } catch (error) {
-      logger.error(`[${this.accountId}] Media download failed`, error);
+      // Check if this is a known transient error that can be safely ignored
+      const isTransientError = error.message?.includes('empty media key') ||
+                               error.message?.includes('Bad MAC') ||
+                               error.message?.includes('decrypt') ||
+                               error.message?.includes('session');
+      
+      if (isTransientError) {
+        // Log at debug level for transient errors common in multi-account setups
+        logger.debug(`[${this.accountId}] Media download failed (transient): ${error.message}`);
+      } else {
+        // Log at error level for unexpected errors
+        logger.error(`[${this.accountId}] Media download failed`, error);
+      }
       throw error;
     }
   }
