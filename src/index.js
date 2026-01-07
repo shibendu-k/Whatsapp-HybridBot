@@ -5,32 +5,48 @@ const { validateEnv, ensureDirectories, ensureAccountsConfig } = require('./util
 const AccountManager = require('./account-manager');
 const HealthMonitor = require('./services/health-monitor');
 
-// Suppress verbose libsignal error messages
+// Suppress verbose libsignal error messages from Baileys
 // These are internal Signal protocol session errors that are expected in multi-account setups
 // The application handles these errors gracefully, so we filter the console output
 const originalConsoleError = console.error;
-const originalConsoleLog = console.log;
 
+// More specific patterns that uniquely identify libsignal errors from Baileys
 const LIBSIGNAL_ERROR_PATTERNS = [
-  /Failed to decrypt message/i,
-  /with any known session/i,
-  /Session error:Error: Bad MAC/i,
-  /at Object\.verifyMAC/i,
-  /at SessionCipher\.doDecryptWhisperMessage/i,
-  /at async SessionCipher\.decryptWithSessions/i,
-  /at async _asyncQueueExecutor/i,
-  /Closing open session in favor of incoming prekey bundle/i,
-  /Closing session: SessionEntry/i,
-  /_chains:/i,
-  /registrationId:/i,
-  /currentRatchet:/i,
-  /ephemeralKeyPair:/i,
-  /chainKey: \[Object\]/i,
-  /chainType:/i
+  // Match the exact error message format from libsignal
+  /^Failed to decrypt message$/,
+  /^with any known session\.\.\.$/,
+  /^Session error:Error: Bad MAC Error: Bad MAC$/,
+  // Match libsignal stack traces (these have very specific paths)
+  /at Object\.verifyMAC \(.*\/libsignal\/src\/crypto\.js/,
+  /at SessionCipher\.doDecryptWhisperMessage \(.*\/libsignal\/src\/session_cipher\.js/,
+  /at async SessionCipher\.decryptWithSessions \(.*\/libsignal\/src\/session_cipher\.js/,
+  /at async _asyncQueueExecutor \(.*\/libsignal\/src\/queue_job\.js/,
+  // Match session closing messages
+  /^Closing open session in favor of incoming prekey bundle$/,
+  /^Closing session: SessionEntry \{$/,
+  // Match session detail output lines (very specific format with leading whitespace)
+  /^\s{2,}_chains: \{$/,
+  /^\s{2,}registrationId: \d+,$/,
+  /^\s{2,}currentRatchet: \{$/,
+  /^\s{2,}ephemeralKeyPair: \{$/,
+  /^\s{2,}'[A-Za-z0-9+/=]+': \{ chainKey: \[Object\], chainType: \d+, messageKeys: \{\} \},?$/,
+  /^\s{2,}pubKey: <Buffer/,
+  /^\s{2,}privKey: <Buffer/,
+  /^\s{2,}lastRemoteEphemeralKey: <Buffer/,
+  /^\s{2,}previousCounter: \d+,$/,
+  /^\s{2,}rootKey: <Buffer/,
+  /^\s{2,}baseKey: <Buffer/,
+  /^\s{2,}baseKeyType: \d+,$/,
+  /^\s{2,}closed: -?\d+,$/,
+  /^\s{2,}used: \d+,$/,
+  /^\s{2,}created: \d+,$/,
+  /^\s{2,}remoteIdentityKey: <Buffer/,
+  /^\s{2,}\}$/,
+  /^\s{2,}\},$/
 ];
 
-// Track if we're in a libsignal error block
-let suppressingLibsignalError = false;
+// Simple approach: if we see a libsignal error, suppress the next few lines as they're likely stack trace
+let suppressNextLines = 0;
 
 console.error = function(...args) {
   const message = args.join(' ');
@@ -39,48 +55,19 @@ console.error = function(...args) {
   const isLibsignalError = LIBSIGNAL_ERROR_PATTERNS.some(pattern => pattern.test(message));
   
   if (isLibsignalError) {
-    suppressingLibsignalError = true;
-    // Don't log this error - it's already handled by the application
+    // Start suppressing this line and the next several (stack trace continuation)
+    suppressNextLines = 10; // Suppress up to 10 following lines
     return;
   }
   
-  // Reset suppression flag if we see a non-libsignal message
-  if (suppressingLibsignalError && !message.includes('  ') && message.length > 0) {
-    suppressingLibsignalError = false;
-  }
-  
-  // If we're still in a libsignal error block (stack trace), skip it
-  if (suppressingLibsignalError) {
+  // If we're currently suppressing, decrement and skip this line
+  if (suppressNextLines > 0) {
+    suppressNextLines--;
     return;
   }
   
   // Pass through all other errors
   originalConsoleError.apply(console, args);
-};
-
-console.log = function(...args) {
-  const message = args.join(' ');
-  
-  // Check if this is part of a libsignal error output
-  const isLibsignalError = LIBSIGNAL_ERROR_PATTERNS.some(pattern => pattern.test(message));
-  
-  if (isLibsignalError) {
-    suppressingLibsignalError = true;
-    return;
-  }
-  
-  // Reset suppression flag if we see a normal message
-  if (suppressingLibsignalError && !message.includes('  ') && message.length > 0) {
-    suppressingLibsignalError = false;
-  }
-  
-  // If we're in a libsignal error block, skip it
-  if (suppressingLibsignalError) {
-    return;
-  }
-  
-  // Pass through all other logs
-  originalConsoleLog.apply(console, args);
 };
 
 // Set IPv4 first for better network performance
