@@ -675,16 +675,18 @@ class HealthMonitor {
    * Start health check server with port retry logic
    */
   start() {
-    return this.tryStartOnPort(this.port, 0);
+    const originalPort = this.port;
+    return this.tryStartOnPort(originalPort, this.port, 0);
   }
 
   /**
    * Try to start server on a specific port, with automatic port incrementing on failure
+   * @param {number} originalPort - The original configured port (for error messages)
    * @param {number} port - Port to try
    * @param {number} attempt - Current attempt number
    * @returns {Promise<void>}
    */
-  tryStartOnPort(port, attempt) {
+  tryStartOnPort(originalPort, port, attempt) {
     return new Promise((resolve, reject) => {
       try {
         this.server = this.app.listen(port, () => {
@@ -698,9 +700,12 @@ class HealthMonitor {
             if (attempt < this.maxPortRetries) {
               const nextPort = port + 1;
               logger.warn(`Port ${port} is already in use, trying port ${nextPort}...`);
-              this.tryStartOnPort(nextPort, attempt + 1).then(resolve).catch(reject);
+              // Use setImmediate to avoid potential stack buildup on many retries
+              setImmediate(() => {
+                this.tryStartOnPort(originalPort, nextPort, attempt + 1).then(resolve).catch(reject);
+              });
             } else {
-              logger.warn(`All ports ${this.port}-${port} are in use, health check server disabled`);
+              logger.warn(`All ports ${originalPort}-${port} are in use, health check server disabled`);
               logger.warn('The bot will continue without health monitoring');
               this.server = null;
               resolve(); // Resolve without server - bot can still function
