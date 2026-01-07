@@ -13,6 +13,11 @@ const WAMessageStubType = proto.WebMessageInfo.StubType;
 // These errors are expected during session transitions and should be logged at debug level
 const TRANSIENT_ERROR_PATTERN = /empty\s+media\s+key|bad\s+mac|decrypt|session/i;
 
+// Retry configuration for decryption failures
+// These values help recover from transient session conflicts in multi-account setups
+const RETRY_DELAY_MS = 350; // Delay between retries - balances recovery speed and server load
+const MAX_MSG_RETRY_COUNT = 3; // Max retries - prevents infinite loops while allowing recovery
+
 // Pino-compatible logger for Baileys (reusable)
 const baileysLogger = {
   level: 'silent',
@@ -68,8 +73,8 @@ class BaileysClient {
         markOnlineOnConnect: false,
         defaultQueryTimeoutMs: undefined,
         // Retry decryption failures (helps with multi-account session conflicts)
-        retryRequestDelayMs: 350,
-        maxMsgRetryCount: 3
+        retryRequestDelayMs: RETRY_DELAY_MS,
+        maxMsgRetryCount: MAX_MSG_RETRY_COUNT
       });
 
       // Store credentials on update

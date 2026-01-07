@@ -269,7 +269,8 @@ class StealthLoggerService {
    * @returns {boolean} True if media can be downloaded
    */
   isMediaDownloadable(mediaMessage) {
-    if (!mediaMessage) return false;
+    // Explicitly check for null or undefined
+    if (mediaMessage == null) return false;
     
     // Check for required encryption keys
     // Media needs either mediaKey (newer) or fileEncSha256 (older format)
