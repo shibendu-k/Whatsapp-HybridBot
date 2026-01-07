@@ -105,6 +105,59 @@ npm update @whiskeysockets/baileys
 npm install
 ```
 
+### Multi-Account Session Conflicts
+
+**Symptoms:**
+- Errors like "Closing open session in favor of incoming prekey bundle"
+- "Bad MAC Error: Bad MAC" in logs
+- "Failed to decrypt message with any known session"
+- "Cannot derive from empty media key" errors
+- Bot becomes unstable after adding second account
+
+**Causes:**
+These errors are common when running multiple WhatsApp accounts simultaneously. They occur due to:
+- Signal protocol session conflicts between accounts
+- Messages arriving during session transitions
+- Missing or corrupted encryption keys in media messages
+
+**Solutions:**
+
+1. **These errors are now handled automatically** (as of v3.2.1):
+   - The bot automatically skips messages with missing encryption keys
+   - Transient decryption errors are logged at debug level only
+   - Retry logic helps recover from temporary session conflicts
+
+2. **If errors persist, try these steps:**
+```bash
+# Restart the bot to clear any stuck sessions
+npm run restart
+
+# If issues continue, reset sessions (will require re-scanning QR codes)
+npm run reset:sessions
+npm start
+```
+
+3. **Reduce Error Visibility:**
+```bash
+# Set log level to info to hide debug messages
+# Edit .env:
+LOG_LEVEL=info
+
+# Restart:
+npm run restart
+```
+
+4. **Monitor Bot Health:**
+```bash
+# Check health dashboard
+open http://localhost:8080/health
+
+# View recent logs
+npm run logs --lines 50
+```
+
+**Note:** Session conflicts are normal in multi-account setups and are now handled gracefully. The bot will continue functioning normally despite these internal errors.
+
 ## Installation Issues
 
 ### "Cannot find module '@whiskeysockets/baileys'"
