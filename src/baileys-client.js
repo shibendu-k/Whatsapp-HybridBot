@@ -217,10 +217,9 @@ class BaileysClient {
       });
     } catch (error) {
       // Check if this is a known transient error that can be safely ignored
-      const isTransientError = error.message?.includes('empty media key') ||
-                               error.message?.includes('Bad MAC') ||
-                               error.message?.includes('decrypt') ||
-                               error.message?.includes('session');
+      // Use case-insensitive regex matching for robustness across baileys versions
+      const errorMsg = error.message?.toLowerCase() || '';
+      const isTransientError = /empty\s+media\s+key|bad\s+mac|decrypt|session/i.test(errorMsg);
       
       if (isTransientError) {
         // Log at debug level for transient errors common in multi-account setups

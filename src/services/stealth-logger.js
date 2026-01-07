@@ -273,11 +273,15 @@ class StealthLoggerService {
     
     // Check for required encryption keys
     // Media needs either mediaKey (newer) or fileEncSha256 (older format)
-    const hasMediaKey = mediaMessage.mediaKey && mediaMessage.mediaKey.length > 0;
-    const hasFileEncSha = mediaMessage.fileEncSha256 && mediaMessage.fileEncSha256.length > 0;
+    // Keys should be Buffers or Uint8Arrays with content
+    const hasMediaKey = (Buffer.isBuffer(mediaMessage.mediaKey) || mediaMessage.mediaKey instanceof Uint8Array) && 
+                         mediaMessage.mediaKey.length > 0;
+    const hasFileEncSha = (Buffer.isBuffer(mediaMessage.fileEncSha256) || mediaMessage.fileEncSha256 instanceof Uint8Array) && 
+                           mediaMessage.fileEncSha256.length > 0;
     
-    // Also check for URL (directPath or url)
-    const hasUrl = mediaMessage.directPath || mediaMessage.url;
+    // Also check for URL (directPath or url) - must be non-empty string
+    const hasUrl = (typeof mediaMessage.directPath === 'string' && mediaMessage.directPath.length > 0) || 
+                   (typeof mediaMessage.url === 'string' && mediaMessage.url.length > 0);
     
     return (hasMediaKey || hasFileEncSha) && hasUrl;
   }
