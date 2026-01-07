@@ -7,6 +7,7 @@ class HealthMonitor {
     this.accountManager = accountManager;
     this.app = express();
     this.port = parseInt(process.env.HEALTH_CHECK_PORT) || 8080;
+    this.maxPortRetries = parseInt(process.env.HEALTH_CHECK_PORT_RETRIES) || 5;
     this.startTime = Date.now();
     this.version = '3.2.0';
     
@@ -671,23 +672,43 @@ class HealthMonitor {
   }
 
   /**
-   * Start health check server
+   * Start health check server with port retry logic
    */
   start() {
+    return this.tryStartOnPort(this.port, 0);
+  }
+
+  /**
+   * Try to start server on a specific port, with automatic port incrementing on failure
+   * @param {number} port - Port to try
+   * @param {number} attempt - Current attempt number
+   * @returns {Promise<void>}
+   */
+  tryStartOnPort(port, attempt) {
     return new Promise((resolve, reject) => {
       try {
-        this.server = this.app.listen(this.port, () => {
-          logger.success(`Health check server running on http://localhost:${this.port}`);
+        this.server = this.app.listen(port, () => {
+          this.port = port; // Update the port to the one that actually worked
+          logger.success(`Health check server running on http://localhost:${port}`);
           resolve();
         });
 
         this.server.on('error', (error) => {
           if (error.code === 'EADDRINUSE') {
-            logger.error(`Port ${this.port} is already in use`);
+            if (attempt < this.maxPortRetries) {
+              const nextPort = port + 1;
+              logger.warn(`Port ${port} is already in use, trying port ${nextPort}...`);
+              this.tryStartOnPort(nextPort, attempt + 1).then(resolve).catch(reject);
+            } else {
+              logger.warn(`All ports ${this.port}-${port} are in use, health check server disabled`);
+              logger.warn('The bot will continue without health monitoring');
+              this.server = null;
+              resolve(); // Resolve without server - bot can still function
+            }
           } else {
             logger.error('Health check server error', error);
+            reject(error);
           }
-          reject(error);
         });
       } catch (error) {
         reject(error);

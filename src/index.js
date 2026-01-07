@@ -71,8 +71,8 @@ class WhatsAppHybridBot {
       logger.success('✅ WhatsApp Hybrid Bot is running!');
       logger.info('');
       
-      if (this.healthMonitor) {
-        logger.info(`📊 Health Dashboard: http://localhost:${process.env.HEALTH_CHECK_PORT || 8080}/health`);
+      if (this.healthMonitor && this.healthMonitor.server) {
+        logger.info(`📊 Health Dashboard: http://localhost:${this.healthMonitor.port}/health`);
       }
       
       logger.info('Press Ctrl+C to stop');
