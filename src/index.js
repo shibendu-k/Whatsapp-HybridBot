@@ -5,6 +5,84 @@ const { validateEnv, ensureDirectories, ensureAccountsConfig } = require('./util
 const AccountManager = require('./account-manager');
 const HealthMonitor = require('./services/health-monitor');
 
+// Suppress verbose libsignal error messages
+// These are internal Signal protocol session errors that are expected in multi-account setups
+// The application handles these errors gracefully, so we filter the console output
+const originalConsoleError = console.error;
+const originalConsoleLog = console.log;
+
+const LIBSIGNAL_ERROR_PATTERNS = [
+  /Failed to decrypt message/i,
+  /with any known session/i,
+  /Session error:Error: Bad MAC/i,
+  /at Object\.verifyMAC/i,
+  /at SessionCipher\.doDecryptWhisperMessage/i,
+  /at async SessionCipher\.decryptWithSessions/i,
+  /at async _asyncQueueExecutor/i,
+  /Closing open session in favor of incoming prekey bundle/i,
+  /Closing session: SessionEntry/i,
+  /_chains:/i,
+  /registrationId:/i,
+  /currentRatchet:/i,
+  /ephemeralKeyPair:/i,
+  /chainKey: \[Object\]/i,
+  /chainType:/i
+];
+
+// Track if we're in a libsignal error block
+let suppressingLibsignalError = false;
+
+console.error = function(...args) {
+  const message = args.join(' ');
+  
+  // Check if this message matches any libsignal error pattern
+  const isLibsignalError = LIBSIGNAL_ERROR_PATTERNS.some(pattern => pattern.test(message));
+  
+  if (isLibsignalError) {
+    suppressingLibsignalError = true;
+    // Don't log this error - it's already handled by the application
+    return;
+  }
+  
+  // Reset suppression flag if we see a non-libsignal message
+  if (suppressingLibsignalError && !message.includes('  ') && message.length > 0) {
+    suppressingLibsignalError = false;
+  }
+  
+  // If we're still in a libsignal error block (stack trace), skip it
+  if (suppressingLibsignalError) {
+    return;
+  }
+  
+  // Pass through all other errors
+  originalConsoleError.apply(console, args);
+};
+
+console.log = function(...args) {
+  const message = args.join(' ');
+  
+  // Check if this is part of a libsignal error output
+  const isLibsignalError = LIBSIGNAL_ERROR_PATTERNS.some(pattern => pattern.test(message));
+  
+  if (isLibsignalError) {
+    suppressingLibsignalError = true;
+    return;
+  }
+  
+  // Reset suppression flag if we see a normal message
+  if (suppressingLibsignalError && !message.includes('  ') && message.length > 0) {
+    suppressingLibsignalError = false;
+  }
+  
+  // If we're in a libsignal error block, skip it
+  if (suppressingLibsignalError) {
+    return;
+  }
+  
+  // Pass through all other logs
+  originalConsoleLog.apply(console, args);
+};
+
 // Set IPv4 first for better network performance
 if (dns.setDefaultResultOrder) {
   try {

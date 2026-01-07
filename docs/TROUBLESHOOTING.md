@@ -126,8 +126,18 @@ These errors are common when running multiple WhatsApp accounts simultaneously. 
    - The bot automatically skips messages with missing encryption keys
    - Transient decryption errors are logged at debug level only
    - Retry logic helps recover from temporary session conflicts
+   - **Console output filtering completely suppresses libsignal error messages**
+   - You should no longer see these errors in your logs at all
 
-2. **If errors persist, try these steps:**
+2. **If you're still seeing these errors after updating:**
+```bash
+# Make sure you're running the latest version
+git pull
+npm install
+npm run restart
+```
+
+3. **If errors persist, try these steps:**
 ```bash
 # Restart the bot to clear any stuck sessions
 npm run restart
@@ -135,16 +145,6 @@ npm run restart
 # If issues continue, reset sessions (will require re-scanning QR codes)
 npm run reset:sessions
 npm start
-```
-
-3. **Reduce Error Visibility:**
-```bash
-# Set log level to info to hide debug messages
-# Edit .env:
-LOG_LEVEL=info
-
-# Restart:
-npm run restart
 ```
 
 4. **Monitor Bot Health:**
@@ -156,7 +156,7 @@ open http://localhost:8080/health
 npm run logs --lines 50
 ```
 
-**Note:** Session conflicts are normal in multi-account setups and are now handled gracefully. The bot will continue functioning normally despite these internal errors.
+**Note:** Session conflicts are normal in multi-account setups and are now handled gracefully. As of v3.2.1, these errors are completely suppressed from the console output. The bot will continue functioning normally despite these internal protocol errors.
 
 ## Installation Issues
 
