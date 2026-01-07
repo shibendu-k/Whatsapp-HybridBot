@@ -13,6 +13,7 @@ class AccountManager {
     this.configPath = path.join(process.cwd(), 'config', 'accounts.json');
     this.tmdbService = new TMDBService();
     this.commandRouter = new CommandRouter();
+    this.configWatcher = null; // Store file watcher for cleanup
     this.stats = {
       messagesProcessed: 0,
       moviesSearched: 0,
@@ -602,7 +603,95 @@ class AccountManager {
     // Start command router cleanup
     this.commandRouter.startCleanupInterval();
     
+    // Start watching for config file changes (hot-reload new accounts)
+    this.startConfigWatcher();
+    
     logger.success('Account Manager started');
+  }
+
+  /**
+   * Start watching config file for new accounts
+   * This enables adding accounts without restarting the bot
+   */
+  startConfigWatcher() {
+    try {
+      // Debounce timer to avoid multiple rapid reloads
+      let debounceTimer = null;
+      const DEBOUNCE_DELAY = 2000; // 2 seconds
+
+      this.configWatcher = fs.watch(this.configPath, (eventType) => {
+        if (eventType === 'change') {
+          // Clear existing timer
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          
+          // Set new debounced timer
+          debounceTimer = setTimeout(async () => {
+            logger.info('📁 Config file changed, checking for new accounts...');
+            await this.checkForNewAccounts();
+          }, DEBOUNCE_DELAY);
+        }
+      });
+
+      logger.info('👁️ Watching for config changes (hot-reload enabled)');
+    } catch (error) {
+      logger.warn('Could not start config watcher:', error.message);
+    }
+  }
+
+  /**
+   * Stop watching config file
+   */
+  stopConfigWatcher() {
+    if (this.configWatcher) {
+      this.configWatcher.close();
+      this.configWatcher = null;
+    }
+  }
+
+  /**
+   * Check for new accounts in config and load them dynamically
+   * @returns {Promise<void>}
+   */
+  async checkForNewAccounts() {
+    try {
+      let config;
+      try {
+        config = await fs.readJSON(this.configPath);
+      } catch (parseError) {
+        logger.warn('Could not parse accounts.json - file may be temporarily invalid');
+        return; // Silently ignore parse errors (file might be mid-write)
+      }
+      
+      if (!config.accounts || config.accounts.length === 0) {
+        return;
+      }
+
+      let newAccountsAdded = 0;
+
+      for (const accountConfig of config.accounts) {
+        // Skip if account already loaded or disabled
+        if (this.accounts.has(accountConfig.accountId)) {
+          continue;
+        }
+        
+        if (!accountConfig.enabled) {
+          continue;
+        }
+
+        // New account found - load it
+        logger.info(`🆕 New account detected: ${accountConfig.accountId}`);
+        await this.addAccount(accountConfig);
+        newAccountsAdded++;
+      }
+
+      if (newAccountsAdded > 0) {
+        logger.success(`✅ Loaded ${newAccountsAdded} new account(s) - scan QR code(s) above`);
+      }
+    } catch (error) {
+      logger.error('Failed to check for new accounts', error);
+    }
   }
 
   /**
@@ -611,6 +700,9 @@ class AccountManager {
    */
   async stopAll() {
     logger.info('Stopping all accounts...');
+    
+    // Stop config watcher
+    this.stopConfigWatcher();
     
     for (const [accountId, account] of this.accounts.entries()) {
       await account.client.disconnect();

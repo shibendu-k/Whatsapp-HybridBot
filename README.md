@@ -29,6 +29,7 @@ A powerful multi-account WhatsApp bot built with Baileys, featuring movie search
 - Isolated message processing
 - Memory-efficient (90MB per account)
 - Sequential QR code scanning for easy setup
+- **Hot-reload**: Add new accounts while bot is running (no restart needed)
 
 ### 📊 Health Monitoring
 - Real-time web dashboard on port 8080
