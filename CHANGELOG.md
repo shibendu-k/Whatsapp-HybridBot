@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Console filtering intercepts and suppresses libsignal error stack traces automatically
 
 ### Technical Details
-- `index.js`: Added console.error and console.log interception to filter libsignal error messages
+- `index.js`: Added console.error interception to filter libsignal error messages (console.log not intercepted to preserve CLI functionality)
 - `baileys-client.js`: Added message validation to skip stub/empty messages, added retry configuration for decryption
 - `stealth-logger.js`: Added `isMediaDownloadable()` method to validate media encryption keys before download attempts
 - Applied validation to regular media messages, view-once messages, and ephemeral messages

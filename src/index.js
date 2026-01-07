@@ -45,7 +45,11 @@ const LIBSIGNAL_ERROR_PATTERNS = [
   /^\s{2,}\},$/
 ];
 
+// Number of lines to suppress after detecting a libsignal error (covers stack trace)
+const SUPPRESSION_LINE_COUNT = 10;
+
 // Simple approach: if we see a libsignal error, suppress the next few lines as they're likely stack trace
+// Note: Node.js is single-threaded for JS execution, so this simple counter is safe
 let suppressNextLines = 0;
 
 console.error = function(...args) {
@@ -56,7 +60,7 @@ console.error = function(...args) {
   
   if (isLibsignalError) {
     // Start suppressing this line and the next several (stack trace continuation)
-    suppressNextLines = 10; // Suppress up to 10 following lines
+    suppressNextLines = SUPPRESSION_LINE_COUNT;
     return;
   }
   
