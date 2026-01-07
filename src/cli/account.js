@@ -139,8 +139,8 @@ async function addAccount() {
   await saveConfig(config);
 
   console.log(chalk.green(`\n✅ Account '${answers.accountId}' added successfully!\n`));
-  console.log(chalk.yellow('To connect this account, run: npm run start\n'));
-  console.log(chalk.cyan('The bot will show a QR code for you to scan.\n'));
+  console.log(chalk.cyan('If the bot is already running, a QR code will appear automatically in the bot console.'));
+  console.log(chalk.cyan('If the bot is not running, start it with: npm run start\n'));
 }
 
 /**
