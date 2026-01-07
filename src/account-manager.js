@@ -13,6 +13,7 @@ class AccountManager {
     this.configPath = path.join(process.cwd(), 'config', 'accounts.json');
     this.tmdbService = new TMDBService();
     this.commandRouter = new CommandRouter();
+    this.configWatcher = null; // Store file watcher for cleanup
     this.stats = {
       messagesProcessed: 0,
       moviesSearched: 0,
@@ -618,7 +619,7 @@ class AccountManager {
       let debounceTimer = null;
       const DEBOUNCE_DELAY = 2000; // 2 seconds
 
-      fs.watch(this.configPath, (eventType) => {
+      this.configWatcher = fs.watch(this.configPath, (eventType) => {
         if (eventType === 'change') {
           // Clear existing timer
           if (debounceTimer) {
@@ -640,12 +641,28 @@ class AccountManager {
   }
 
   /**
+   * Stop watching config file
+   */
+  stopConfigWatcher() {
+    if (this.configWatcher) {
+      this.configWatcher.close();
+      this.configWatcher = null;
+    }
+  }
+
+  /**
    * Check for new accounts in config and load them dynamically
    * @returns {Promise<void>}
    */
   async checkForNewAccounts() {
     try {
-      const config = await fs.readJSON(this.configPath);
+      let config;
+      try {
+        config = await fs.readJSON(this.configPath);
+      } catch (parseError) {
+        logger.warn('Could not parse accounts.json - file may be temporarily invalid');
+        return; // Silently ignore parse errors (file might be mid-write)
+      }
       
       if (!config.accounts || config.accounts.length === 0) {
         return;
@@ -683,6 +700,9 @@ class AccountManager {
    */
   async stopAll() {
     logger.info('Stopping all accounts...');
+    
+    // Stop config watcher
+    this.stopConfigWatcher();
     
     for (const [accountId, account] of this.accounts.entries()) {
       await account.client.disconnect();
