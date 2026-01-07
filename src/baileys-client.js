@@ -9,6 +9,10 @@ const { sleep, getRandomDelay, maskPhoneNumber } = require('./utils/helpers');
 // Get WAMessageStubType from proto for correct message deletion detection
 const WAMessageStubType = proto.WebMessageInfo.StubType;
 
+// Regex pattern for detecting transient errors common in multi-account setups
+// These errors are expected during session transitions and should be logged at debug level
+const TRANSIENT_ERROR_PATTERN = /empty\s+media\s+key|bad\s+mac|decrypt|session/i;
+
 // Pino-compatible logger for Baileys (reusable)
 const baileysLogger = {
   level: 'silent',
@@ -145,6 +149,8 @@ class BaileysClient {
 
     for (const message of messages) {
       // Skip messages that failed to decrypt (common in multi-account setups)
+      // messageStubType indicates a protocol message (connection status, encryption updates, etc.)
+      // Empty messages occur when decryption fails due to session conflicts between accounts
       if (message.messageStubType || !message.message) {
         logger.debug(`[${this.accountId}] Skipping stub/empty message`);
         continue;
@@ -219,7 +225,7 @@ class BaileysClient {
       // Check if this is a known transient error that can be safely ignored
       // Use case-insensitive regex matching for robustness across baileys versions
       const errorMsg = error.message?.toLowerCase() || '';
-      const isTransientError = /empty\s+media\s+key|bad\s+mac|decrypt|session/i.test(errorMsg);
+      const isTransientError = TRANSIENT_ERROR_PATTERN.test(errorMsg);
       
       if (isTransientError) {
         // Log at debug level for transient errors common in multi-account setups

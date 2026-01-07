@@ -274,16 +274,35 @@ class StealthLoggerService {
     // Check for required encryption keys
     // Media needs either mediaKey (newer) or fileEncSha256 (older format)
     // Keys should be Buffers or Uint8Arrays with content
-    const hasMediaKey = (Buffer.isBuffer(mediaMessage.mediaKey) || mediaMessage.mediaKey instanceof Uint8Array) && 
-                         mediaMessage.mediaKey.length > 0;
-    const hasFileEncSha = (Buffer.isBuffer(mediaMessage.fileEncSha256) || mediaMessage.fileEncSha256 instanceof Uint8Array) && 
-                           mediaMessage.fileEncSha256.length > 0;
+    const hasValidMediaKey = this._isValidEncryptionKey(mediaMessage.mediaKey);
+    const hasValidFileEncSha = this._isValidEncryptionKey(mediaMessage.fileEncSha256);
+    const hasEncryptionKey = hasValidMediaKey || hasValidFileEncSha;
     
     // Also check for URL (directPath or url) - must be non-empty string
-    const hasUrl = (typeof mediaMessage.directPath === 'string' && mediaMessage.directPath.length > 0) || 
-                   (typeof mediaMessage.url === 'string' && mediaMessage.url.length > 0);
+    const hasValidUrl = this._isValidUrl(mediaMessage.directPath) || 
+                        this._isValidUrl(mediaMessage.url);
     
-    return (hasMediaKey || hasFileEncSha) && hasUrl;
+    return hasEncryptionKey && hasValidUrl;
+  }
+
+  /**
+   * Check if encryption key is valid (Buffer or Uint8Array with content)
+   * @private
+   * @param {*} key - The key to validate
+   * @returns {boolean} True if key is valid
+   */
+  _isValidEncryptionKey(key) {
+    return (Buffer.isBuffer(key) || key instanceof Uint8Array) && key.length > 0;
+  }
+
+  /**
+   * Check if URL is a non-empty string
+   * @private
+   * @param {*} url - The URL to validate
+   * @returns {boolean} True if URL is valid
+   */
+  _isValidUrl(url) {
+    return typeof url === 'string' && url.length > 0;
   }
 
   /**
