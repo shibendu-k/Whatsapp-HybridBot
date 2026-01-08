@@ -5,6 +5,75 @@ const { validateEnv, ensureDirectories, ensureAccountsConfig } = require('./util
 const AccountManager = require('./account-manager');
 const HealthMonitor = require('./services/health-monitor');
 
+// Suppress verbose libsignal error messages from Baileys
+// These are internal Signal protocol session errors that are expected in multi-account setups
+// The application handles these errors gracefully, so we filter the console output
+const originalConsoleError = console.error;
+
+// More specific patterns that uniquely identify libsignal errors from Baileys
+const LIBSIGNAL_ERROR_PATTERNS = [
+  // Match the exact error message format from libsignal
+  /^Failed to decrypt message$/,
+  /^with any known session\.\.\.$/,
+  /^Session error:Error: Bad MAC Error: Bad MAC$/,
+  // Match libsignal stack traces (these have very specific paths)
+  /at Object\.verifyMAC \(.*\/libsignal\/src\/crypto\.js/,
+  /at SessionCipher\.doDecryptWhisperMessage \(.*\/libsignal\/src\/session_cipher\.js/,
+  /at async SessionCipher\.decryptWithSessions \(.*\/libsignal\/src\/session_cipher\.js/,
+  /at async _asyncQueueExecutor \(.*\/libsignal\/src\/queue_job\.js/,
+  // Match session closing messages
+  /^Closing open session in favor of incoming prekey bundle$/,
+  /^Closing session: SessionEntry \{$/,
+  // Match session detail output lines (very specific format with leading whitespace)
+  /^\s{2,}_chains: \{$/,
+  /^\s{2,}registrationId: \d+,$/,
+  /^\s{2,}currentRatchet: \{$/,
+  /^\s{2,}ephemeralKeyPair: \{$/,
+  /^\s{2,}'[A-Za-z0-9+/=]+': \{ chainKey: \[Object\], chainType: \d+, messageKeys: \{\} \},?$/,
+  /^\s{2,}pubKey: <Buffer/,
+  /^\s{2,}privKey: <Buffer/,
+  /^\s{2,}lastRemoteEphemeralKey: <Buffer/,
+  /^\s{2,}previousCounter: \d+,$/,
+  /^\s{2,}rootKey: <Buffer/,
+  /^\s{2,}baseKey: <Buffer/,
+  /^\s{2,}baseKeyType: \d+,$/,
+  /^\s{2,}closed: -?\d+,$/,
+  /^\s{2,}used: \d+,$/,
+  /^\s{2,}created: \d+,$/,
+  /^\s{2,}remoteIdentityKey: <Buffer/,
+  /^\s{2,}\}$/,
+  /^\s{2,}\},$/
+];
+
+// Number of lines to suppress after detecting a libsignal error (covers stack trace)
+const SUPPRESSION_LINE_COUNT = 10;
+
+// Simple approach: if we see a libsignal error, suppress the next few lines as they're likely stack trace
+// Note: Node.js is single-threaded for JS execution, so this simple counter is safe
+let suppressNextLines = 0;
+
+console.error = function(...args) {
+  const message = args.join(' ');
+  
+  // Check if this message matches any libsignal error pattern
+  const isLibsignalError = LIBSIGNAL_ERROR_PATTERNS.some(pattern => pattern.test(message));
+  
+  if (isLibsignalError) {
+    // Start suppressing this line and the next several (stack trace continuation)
+    suppressNextLines = SUPPRESSION_LINE_COUNT;
+    return;
+  }
+  
+  // If we're currently suppressing, decrement and skip this line
+  if (suppressNextLines > 0) {
+    suppressNextLines--;
+    return;
+  }
+  
+  // Pass through all other errors
+  originalConsoleError.apply(console, args);
+};
+
 // Set IPv4 first for better network performance
 if (dns.setDefaultResultOrder) {
   try {

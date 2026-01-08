@@ -9,6 +9,15 @@ const { sleep, getRandomDelay, maskPhoneNumber } = require('./utils/helpers');
 // Get WAMessageStubType from proto for correct message deletion detection
 const WAMessageStubType = proto.WebMessageInfo.StubType;
 
+// Regex pattern for detecting transient errors common in multi-account setups
+// These errors are expected during session transitions and should be logged at debug level
+const TRANSIENT_ERROR_PATTERN = /empty\s+media\s+key|bad\s+mac|decrypt|session/i;
+
+// Retry configuration for decryption failures
+// These values help recover from transient session conflicts in multi-account setups
+const RETRY_DELAY_MS = 350; // Delay between retries - balances recovery speed and server load
+const MAX_MSG_RETRY_COUNT = 3; // Max retries - prevents infinite loops while allowing recovery
+
 // Pino-compatible logger for Baileys (reusable)
 const baileysLogger = {
   level: 'silent',
@@ -62,7 +71,10 @@ class BaileysClient {
         browser: ['WhatsApp Hybrid Bot', 'Chrome', '3.2.0'],
         syncFullHistory: false,
         markOnlineOnConnect: false,
-        defaultQueryTimeoutMs: undefined
+        defaultQueryTimeoutMs: undefined,
+        // Retry decryption failures (helps with multi-account session conflicts)
+        retryRequestDelayMs: RETRY_DELAY_MS,
+        maxMsgRetryCount: MAX_MSG_RETRY_COUNT
       });
 
       // Store credentials on update
@@ -141,6 +153,14 @@ class BaileysClient {
     if (type !== 'notify') return;
 
     for (const message of messages) {
+      // Skip messages that failed to decrypt (common in multi-account setups)
+      // messageStubType indicates a protocol message (connection status, encryption updates, etc.)
+      // Empty messages occur when decryption fails due to session conflicts between accounts
+      if (message.messageStubType || !message.message) {
+        logger.debug(`[${this.accountId}] Skipping stub/empty message`);
+        continue;
+      }
+      
       // Queue message for processing
       this.messageQueue.push(message);
     }
@@ -207,7 +227,18 @@ class BaileysClient {
         reuploadRequest: this.sock.updateMediaMessage
       });
     } catch (error) {
-      logger.error(`[${this.accountId}] Media download failed`, error);
+      // Check if this is a known transient error that can be safely ignored
+      // Use case-insensitive regex matching for robustness across baileys versions
+      const errorMsg = error.message || '';
+      const isTransientError = TRANSIENT_ERROR_PATTERN.test(errorMsg);
+      
+      if (isTransientError) {
+        // Log at debug level for transient errors common in multi-account setups
+        logger.debug(`[${this.accountId}] Media download failed (transient): ${error.message}`);
+      } else {
+        // Log at error level for unexpected errors
+        logger.error(`[${this.accountId}] Media download failed`, error);
+      }
       throw error;
     }
   }
