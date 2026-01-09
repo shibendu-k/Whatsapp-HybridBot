@@ -8,6 +8,19 @@ const chalk = require('chalk');
 const configPath = path.join(process.cwd(), 'config', 'accounts.json');
 
 /**
+ * Parse a comma-separated group list into an array of trimmed names
+ * @param {string} value
+ * @returns {string[]}
+ */
+const parseGroupList = (value) => {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map(g => g.trim())
+    .filter(g => g.length > 0);
+};
+
+/**
  * Load accounts configuration
  */
 async function loadConfig() {
@@ -111,9 +124,7 @@ async function addAccount() {
     modules: {
       movieBot: {
         enabled: answers.enableMovieBot,
-        allowedGroups: answers.allowedGroups 
-          ? answers.allowedGroups.split(',').map(g => g.trim()).filter(g => g.length > 0)
-          : [],
+        allowedGroups: parseGroupList(answers.allowedGroups),
         commandPrefix: '!',
         rateLimit: {
           maxRequests: 10,
@@ -124,9 +135,7 @@ async function addAccount() {
       },
       stealthLogger: {
         enabled: answers.enableStealthLogger,
-        excludedGroups: answers.excludedGroups
-          ? answers.excludedGroups.split(',').map(g => g.trim()).filter(g => g.length > 0)
-          : [],
+        excludedGroups: parseGroupList(answers.excludedGroups),
         statusCacheDuration: 86400000,
         mediaCacheDuration: 244800000,
         maxFileSize: 157286400,
@@ -242,14 +251,6 @@ async function editAccount() {
       when: (answers) => answers.enableStealthLogger
     }
   ]);
-
-  const parseGroupList = (value) => {
-    if (typeof value !== 'string') return [];
-    return value
-      .split(',')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-  };
 
   // Update account
   account.vaultNumber = answers.vaultNumber;

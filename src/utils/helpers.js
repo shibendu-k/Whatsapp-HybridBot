@@ -195,9 +195,10 @@ function matchesGroupName(groupName, groupList) {
     if (!name) return '';
     return name
       .normalize('NFKD')
-      // Strip surrounding quote-like characters and normalize curved quotes to straight quotes
+      // Strip surrounding quote-like characters (double quotes, single quotes, backticks)
       .replace(/^["'`]+|["'`]+$/g, '')
-      .replace(/[’‘`´]/g, "'")
+      // Normalize curly/smart quotes (U+2019, U+2018, U+0060, U+00B4) to a straight apostrophe
+      .replace(/[\u2019\u2018\u0060\u00B4]/g, "'")
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
