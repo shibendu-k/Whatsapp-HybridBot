@@ -222,18 +222,42 @@ async function editAccount() {
       default: account.modules.movieBot.enabled
     },
     {
+      type: 'input',
+      name: 'allowedGroups',
+      message: 'Allowed groups for Movie Bot (comma-separated, leave empty for all):',
+      default: (account.modules.movieBot.allowedGroups || []).join(', '),
+      when: (answers) => answers.enableMovieBot
+    },
+    {
       type: 'confirm',
       name: 'enableStealthLogger',
       message: 'Enable Stealth Logger?',
       default: account.modules.stealthLogger.enabled
+    },
+    {
+      type: 'input',
+      name: 'excludedGroups',
+      message: 'Excluded groups for Stealth Logger (comma-separated):',
+      default: (account.modules.stealthLogger.excludedGroups || []).join(', '),
+      when: (answers) => answers.enableStealthLogger
     }
   ]);
+
+  const parseGroupList = (value) => value
+    ? value.split(',').map(g => g.trim()).filter(g => g.length > 0)
+    : [];
 
   // Update account
   account.vaultNumber = answers.vaultNumber;
   account.description = answers.description;
   account.modules.movieBot.enabled = answers.enableMovieBot;
+  if (answers.allowedGroups !== undefined) {
+    account.modules.movieBot.allowedGroups = parseGroupList(answers.allowedGroups);
+  }
   account.modules.stealthLogger.enabled = answers.enableStealthLogger;
+  if (answers.excludedGroups !== undefined) {
+    account.modules.stealthLogger.excludedGroups = parseGroupList(answers.excludedGroups);
+  }
 
   await saveConfig(config);
 

@@ -189,12 +189,25 @@ async function getSenderName(msg, client) {
  */
 function matchesGroupName(groupName, groupList) {
   if (!groupName || !groupList || groupList.length === 0) return false;
+
+  const normalize = (name) => {
+    if (!name) return '';
+    return name
+      .normalize('NFKD')
+      .replace(/^["'`]+|["'`]+$/g, '')
+      .replace(/[’‘`´]/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  };
   
-  const lowerGroupName = groupName.toLowerCase();
-  return groupList.some(name => 
-    lowerGroupName.includes(name.toLowerCase()) || 
-    name.toLowerCase().includes(lowerGroupName)
-  );
+  const normalizedGroupName = normalize(groupName);
+  return groupList.some(name => {
+    const normalizedListName = normalize(name);
+    if (!normalizedListName) return false;
+    return normalizedGroupName.includes(normalizedListName) || 
+      normalizedListName.includes(normalizedGroupName);
+  });
 }
 
 /**
