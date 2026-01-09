@@ -243,9 +243,13 @@ async function editAccount() {
     }
   ]);
 
-  const parseGroupList = (value) => value
-    ? value.split(',').map(g => g.trim()).filter(g => g.length > 0)
-    : [];
+  const parseGroupList = (value) => {
+    if (typeof value !== 'string') return [];
+    return value
+      .split(',')
+      .map(g => g.trim())
+      .filter(g => g.length > 0);
+  };
 
   // Update account
   account.vaultNumber = answers.vaultNumber;

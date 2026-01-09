@@ -184,16 +184,18 @@ async function getSenderName(msg, client) {
 /**
  * Check if group name matches any in the list (case-insensitive partial match)
  * @param {string} groupName - Group name to check
- * @param {string[]} groupList - List of group names to match against
- * @returns {boolean} True if matches
- */
+  * @param {string[]} groupList - List of group names to match against
+  * @returns {boolean} True if matches
+  */
 function matchesGroupName(groupName, groupList) {
   if (!groupName || !groupList || groupList.length === 0) return false;
 
+  // Normalize names to handle unicode quotes, extra spacing, and surrounding quote characters
   const normalize = (name) => {
     if (!name) return '';
     return name
       .normalize('NFKD')
+      // Strip surrounding quote-like characters and normalize curved quotes to straight quotes
       .replace(/^["'`]+|["'`]+$/g, '')
       .replace(/[’‘`´]/g, "'")
       .replace(/\s+/g, ' ')
