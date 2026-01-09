@@ -184,17 +184,33 @@ async function getSenderName(msg, client) {
 /**
  * Check if group name matches any in the list (case-insensitive partial match)
  * @param {string} groupName - Group name to check
- * @param {string[]} groupList - List of group names to match against
- * @returns {boolean} True if matches
- */
+  * @param {string[]} groupList - List of group names to match against
+  * @returns {boolean} True if matches
+  */
 function matchesGroupName(groupName, groupList) {
   if (!groupName || !groupList || groupList.length === 0) return false;
+
+  // Normalize names to handle unicode quotes, extra spacing, and surrounding quote characters
+  const normalize = (name) => {
+    if (!name) return '';
+    return name
+      .normalize('NFKD')
+      // Strip surrounding quote-like characters (double quotes, single quotes, backticks)
+      .replace(/^["'`]+|["'`]+$/g, '')
+      // Normalize curly/smart quotes (U+2019, U+2018, U+0060, U+00B4) to a straight apostrophe
+      .replace(/[\u2019\u2018\u0060\u00B4]/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  };
   
-  const lowerGroupName = groupName.toLowerCase();
-  return groupList.some(name => 
-    lowerGroupName.includes(name.toLowerCase()) || 
-    name.toLowerCase().includes(lowerGroupName)
-  );
+  const normalizedGroupName = normalize(groupName);
+  return groupList.some(name => {
+    const normalizedListName = normalize(name);
+    if (!normalizedListName) return false;
+    return normalizedGroupName.includes(normalizedListName) || 
+      normalizedListName.includes(normalizedGroupName);
+  });
 }
 
 /**
