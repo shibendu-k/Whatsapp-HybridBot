@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('dotenv').config();
 const { program } = require('commander');
 const inquirer = require('inquirer');
 const fs = require('fs-extra');
@@ -75,6 +76,12 @@ async function cleanCache() {
   console.log(chalk.green(`  ✓ Cleaned ${cleaned} old file(s)\n`));
 }
 
+function formatDuration(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
 /**
  * Show system information
  */
@@ -88,7 +95,8 @@ function showSystem() {
   console.log(`  Architecture: ${chalk.green(process.arch)}`);
   console.log(`  Memory (Heap): ${chalk.cyan(Math.round(memoryUsage.heapUsed / 1024 / 1024))} MB / ${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`);
   console.log(`  Memory (RSS): ${chalk.cyan(Math.round(memoryUsage.rss / 1024 / 1024))} MB`);
-  console.log(`  Uptime: ${chalk.cyan(Math.floor(process.uptime()))} seconds`);
+  const uptimeSeconds = Math.floor(process.uptime());
+  console.log(`  Uptime: ${chalk.cyan(formatDuration(uptimeSeconds))} (HH:MM)`);
   
   console.log(chalk.gray('─'.repeat(50) + '\n'));
 }

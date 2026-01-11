@@ -134,20 +134,11 @@ async function ensureDirectories() {
  */
 async function ensureAccountsConfig() {
   const accountsPath = path.join(process.cwd(), 'config', 'accounts.json');
-  const examplePath = path.join(process.cwd(), 'config', 'accounts.example.json');
   
   if (!await fs.pathExists(accountsPath)) {
-    if (await fs.pathExists(examplePath)) {
-      await fs.copy(examplePath, accountsPath);
-      logger.info('Created accounts.json from example template');
-    } else {
-      // Create minimal config
-      const minimalConfig = {
-        accounts: []
-      };
-      await fs.writeJSON(accountsPath, minimalConfig, { spaces: 2 });
-      logger.info('Created empty accounts.json');
-    }
+    const minimalConfig = { accounts: [] };
+    await fs.writeJSON(accountsPath, minimalConfig, { spaces: 2 });
+    logger.info('Created empty accounts.json');
   }
 }
 
