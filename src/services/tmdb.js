@@ -21,6 +21,22 @@ class TMDBService {
   }
 
   /**
+   * Helper to safely fetch from TMDB API with fallback on error
+   * @param {Promise} fetchPromise - The axios promise to execute
+   * @param {object} defaultValue - Default value to return on error
+   * @param {string} description - Description for logging
+   * @returns {Promise<object>} Response data or default value
+   */
+  async _safeFetch(fetchPromise, defaultValue, description) {
+    try {
+      return await fetchPromise;
+    } catch (err) {
+      logger.debug(`Failed to fetch ${description}: ${err.message}`);
+      return { data: defaultValue };
+    }
+  }
+
+  /**
    * Get country flag emoji from ISO code
    * @param {string} isoCode - Two-letter country ISO code
    * @returns {string} Flag emoji
@@ -162,23 +178,28 @@ class TMDBService {
         return retryWithBackoff(async () => {
           logger.movie(`Fetching movie details: ${movieId}`);
           
-          // Fetch multiple endpoints in parallel with individual error handling
+          // Fetch multiple endpoints in parallel with individual error handling using helper
           const [details, credits, videos, watchProviders, externalIds] = await Promise.all([
-            this.client.get(`/movie/${movieId}`, {
-              params: { api_key: this.apiKey, language: 'en-US' }
-            }).catch(err => { logger.debug(`Failed to fetch movie details: ${err.message}`); return { data: {} }; }),
-            this.client.get(`/movie/${movieId}/credits`, {
-              params: { api_key: this.apiKey }
-            }).catch(err => { logger.debug(`Failed to fetch credits: ${err.message}`); return { data: { cast: [] } }; }),
-            this.client.get(`/movie/${movieId}/videos`, {
-              params: { api_key: this.apiKey, language: 'en-US' }
-            }).catch(err => { logger.debug(`Failed to fetch videos: ${err.message}`); return { data: { results: [] } }; }),
-            this.client.get(`/movie/${movieId}/watch/providers`, {
-              params: { api_key: this.apiKey }
-            }).catch(err => { logger.debug(`Failed to fetch watch providers: ${err.message}`); return { data: { results: {} } }; }),
-            this.client.get(`/movie/${movieId}/external_ids`, {
-              params: { api_key: this.apiKey }
-            }).catch(err => { logger.debug(`Failed to fetch external IDs: ${err.message}`); return { data: {} }; })
+            this._safeFetch(
+              this.client.get(`/movie/${movieId}`, { params: { api_key: this.apiKey, language: 'en-US' } }),
+              {}, 'movie details'
+            ),
+            this._safeFetch(
+              this.client.get(`/movie/${movieId}/credits`, { params: { api_key: this.apiKey } }),
+              { cast: [] }, 'credits'
+            ),
+            this._safeFetch(
+              this.client.get(`/movie/${movieId}/videos`, { params: { api_key: this.apiKey, language: 'en-US' } }),
+              { results: [] }, 'videos'
+            ),
+            this._safeFetch(
+              this.client.get(`/movie/${movieId}/watch/providers`, { params: { api_key: this.apiKey } }),
+              { results: {} }, 'watch providers'
+            ),
+            this._safeFetch(
+              this.client.get(`/movie/${movieId}/external_ids`, { params: { api_key: this.apiKey } }),
+              {}, 'external IDs'
+            )
           ]);
 
           const movie = details.data || {};
@@ -237,8 +258,10 @@ class TMDBService {
           const imdbLink = imdbId ? `https://www.imdb.com/title/${imdbId}` : null;
 
           // Build watch links - JustWatch aggregates all platforms on one page
-          const movieTitle = movie.title || 'unknown';
-          const justWatchLink = `https://www.justwatch.com/in/movie/${movieTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+          // Only create valid JustWatch link if we have a valid title
+          const justWatchLink = movie.title 
+            ? `https://www.justwatch.com/in/movie/${movie.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+            : null;
 
           return {
             title: movie.title,
@@ -280,23 +303,28 @@ class TMDBService {
         return retryWithBackoff(async () => {
           logger.movie(`Fetching series details: ${seriesId}`);
           
-          // Fetch multiple endpoints in parallel with individual error handling
+          // Fetch multiple endpoints in parallel with individual error handling using helper
           const [details, credits, videos, watchProviders, externalIds] = await Promise.all([
-            this.client.get(`/tv/${seriesId}`, {
-              params: { api_key: this.apiKey, language: 'en-US' }
-            }).catch(err => { logger.debug(`Failed to fetch series details: ${err.message}`); return { data: {} }; }),
-            this.client.get(`/tv/${seriesId}/credits`, {
-              params: { api_key: this.apiKey }
-            }).catch(err => { logger.debug(`Failed to fetch credits: ${err.message}`); return { data: { cast: [] } }; }),
-            this.client.get(`/tv/${seriesId}/videos`, {
-              params: { api_key: this.apiKey, language: 'en-US' }
-            }).catch(err => { logger.debug(`Failed to fetch videos: ${err.message}`); return { data: { results: [] } }; }),
-            this.client.get(`/tv/${seriesId}/watch/providers`, {
-              params: { api_key: this.apiKey }
-            }).catch(err => { logger.debug(`Failed to fetch watch providers: ${err.message}`); return { data: { results: {} } }; }),
-            this.client.get(`/tv/${seriesId}/external_ids`, {
-              params: { api_key: this.apiKey }
-            }).catch(err => { logger.debug(`Failed to fetch external IDs: ${err.message}`); return { data: {} }; })
+            this._safeFetch(
+              this.client.get(`/tv/${seriesId}`, { params: { api_key: this.apiKey, language: 'en-US' } }),
+              {}, 'series details'
+            ),
+            this._safeFetch(
+              this.client.get(`/tv/${seriesId}/credits`, { params: { api_key: this.apiKey } }),
+              { cast: [] }, 'credits'
+            ),
+            this._safeFetch(
+              this.client.get(`/tv/${seriesId}/videos`, { params: { api_key: this.apiKey, language: 'en-US' } }),
+              { results: [] }, 'videos'
+            ),
+            this._safeFetch(
+              this.client.get(`/tv/${seriesId}/watch/providers`, { params: { api_key: this.apiKey } }),
+              { results: {} }, 'watch providers'
+            ),
+            this._safeFetch(
+              this.client.get(`/tv/${seriesId}/external_ids`, { params: { api_key: this.apiKey } }),
+              {}, 'external IDs'
+            )
           ]);
 
           const series = details.data || {};
@@ -344,8 +372,10 @@ class TMDBService {
           const imdbLink = imdbId ? `https://www.imdb.com/title/${imdbId}` : null;
 
           // Build watch link - JustWatch aggregates all platforms on one page
-          const seriesName = series.name || 'unknown';
-          const justWatchLink = `https://www.justwatch.com/in/tv-show/${seriesName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+          // Only create valid JustWatch link if we have a valid series name
+          const justWatchLink = series.name
+            ? `https://www.justwatch.com/in/tv-show/${series.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+            : null;
 
           return {
             title: series.name,

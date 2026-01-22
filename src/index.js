@@ -217,12 +217,13 @@ class WhatsAppHybridBot {
     process.on('uncaughtException', (error) => {
       logger.error('Uncaught exception', error);
       // Log more details for debugging
-      logger.error(`Stack: ${error.stack}`);
-      // Don't immediately shutdown - log and continue if possible
-      // Only shutdown for critical errors
-      if (error.message && (error.message.includes('ECONNREFUSED') || 
-          error.message.includes('ETIMEDOUT') || 
-          error.message.includes('network'))) {
+      if (error.stack) {
+        logger.error(`Stack: ${error.stack}`);
+      }
+      
+      // Use the isRetryableError helper to check if this is a transient network error
+      const { isRetryableError } = require('./utils/helpers');
+      if (isRetryableError(error)) {
         logger.warn('Network-related error - bot will continue running');
       } else {
         this.shutdown();
