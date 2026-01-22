@@ -452,6 +452,14 @@ class AccountManager {
           ? await this.tmdbService.searchMovie(command.query)
           : await this.tmdbService.searchSeries(command.query);
 
+        // Handle empty results (including API failures)
+        if (!results || results.length === 0) {
+          await client.sendMessage(message.key.remoteJid, 
+            `❌ No ${command.type === 'movie_search' ? 'movies' : 'series'} found for "${command.query}". Try a different search term.`
+          );
+          return;
+        }
+
         // Store search state
         this.commandRouter.setUserSearch(userId, {
           results,
@@ -472,7 +480,7 @@ class AccountManager {
       else if (command.type === 'selection') {
         const searchState = this.commandRouter.getUserSearch(userId);
         
-        if (!searchState) {
+        if (!searchState || !searchState.results) {
           return; // No active search
         }
 
@@ -487,6 +495,14 @@ class AccountManager {
         const details = searchState.type === 'movie'
           ? await this.tmdbService.getMovieDetails(selected.id)
           : await this.tmdbService.getSeriesDetails(selected.id);
+
+        // Handle null details (API failure)
+        if (!details) {
+          await client.sendMessage(message.key.remoteJid, 
+            `❌ Sorry, couldn't fetch details for "${selected.title}". Please try again later.`
+          );
+          return;
+        }
 
         // Download poster and send with formatted caption
         if (details.poster) {
@@ -512,6 +528,15 @@ class AccountManager {
     } catch (error) {
       logger.error(`[${accountId}] Movie bot processing failed`, error);
       this.stats.errors++;
+      
+      // Send error message to user instead of silent failure
+      try {
+        await client.sendMessage(message.key.remoteJid, 
+          '❌ An error occurred while processing your request. Please try again.'
+        );
+      } catch (sendError) {
+        logger.debug(`Failed to send error message: ${sendError.message}`);
+      }
     }
   }
 
