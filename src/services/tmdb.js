@@ -22,16 +22,33 @@ class TMDBService {
 
   /**
    * Helper to safely fetch from TMDB API with fallback on error
+   * For network errors (ECONNRESET, ETIMEDOUT, etc.), re-throws so retryWithBackoff can retry
+   * For other errors (404, etc.), returns default value
    * @param {Promise} fetchPromise - The axios promise to execute
    * @param {object} defaultValue - Default value to return on error
    * @param {string} description - Description for logging
+   * @param {boolean} isRequired - If true, re-throw network errors for retry
    * @returns {Promise<object>} Response data or default value
    */
-  async _safeFetch(fetchPromise, defaultValue, description) {
+  async _safeFetch(fetchPromise, defaultValue, description, isRequired = false) {
+    // Network error codes that should trigger a retry
+    const networkErrorCodes = ['ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'EPIPE'];
+    
     try {
       return await fetchPromise;
     } catch (err) {
+      const isNetworkError = networkErrorCodes.includes(err.code) || 
+                             err.message?.includes('ECONNRESET') ||
+                             err.message?.includes('timeout') ||
+                             err.message?.includes('Network Error');
+      
       logger.debug(`Failed to fetch ${description}: ${err.message}`);
+      
+      // Re-throw network errors for required endpoints so retryWithBackoff can retry
+      if (isRequired && isNetworkError) {
+        throw err;
+      }
+      
       return { data: defaultValue };
     }
   }
@@ -179,10 +196,11 @@ class TMDBService {
           logger.movie(`Fetching movie details: ${movieId}`);
           
           // Fetch multiple endpoints in parallel with individual error handling using helper
+          // The main movie details endpoint is marked as required (isRequired=true) so network errors will trigger retry
           const [details, credits, videos, watchProviders, externalIds] = await Promise.all([
             this._safeFetch(
               this.client.get(`/movie/${movieId}`, { params: { api_key: this.apiKey, language: 'en-US' } }),
-              {}, 'movie details'
+              {}, 'movie details', true  // Required - network errors will trigger retry
             ),
             this._safeFetch(
               this.client.get(`/movie/${movieId}/credits`, { params: { api_key: this.apiKey } }),
@@ -304,10 +322,11 @@ class TMDBService {
           logger.movie(`Fetching series details: ${seriesId}`);
           
           // Fetch multiple endpoints in parallel with individual error handling using helper
+          // The main series details endpoint is marked as required (isRequired=true) so network errors will trigger retry
           const [details, credits, videos, watchProviders, externalIds] = await Promise.all([
             this._safeFetch(
               this.client.get(`/tv/${seriesId}`, { params: { api_key: this.apiKey, language: 'en-US' } }),
-              {}, 'series details'
+              {}, 'series details', true  // Required - network errors will trigger retry
             ),
             this._safeFetch(
               this.client.get(`/tv/${seriesId}/credits`, { params: { api_key: this.apiKey } }),
