@@ -216,11 +216,28 @@ class WhatsAppHybridBot {
 
     process.on('uncaughtException', (error) => {
       logger.error('Uncaught exception', error);
-      this.shutdown();
+      // Log more details for debugging
+      if (error.stack) {
+        logger.error(`Stack: ${error.stack}`);
+      }
+      
+      // Use the isRetryableError helper to check if this is a transient network error
+      const { isRetryableError } = require('./utils/helpers');
+      if (isRetryableError(error)) {
+        logger.warn('Network-related error - bot will continue running');
+      } else {
+        this.shutdown();
+      }
     });
 
     process.on('unhandledRejection', (reason, promise) => {
       logger.error('Unhandled rejection', reason);
+      // Log more details for debugging
+      if (reason && reason.stack) {
+        logger.error(`Rejection stack: ${reason.stack}`);
+      }
+      // Don't shutdown for unhandled rejections - just log them
+      // This prevents crashes from transient API errors
     });
   }
 

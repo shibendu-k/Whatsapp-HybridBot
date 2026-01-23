@@ -182,7 +182,27 @@ async function getSenderName(msg, client) {
 }
 
 /**
+ * Normalize string for comparison - handles smart quotes, apostrophes, etc.
+ * @param {string} str - String to normalize
+ * @returns {string} Normalized string
+ */
+function normalizeForComparison(str) {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    // Normalize various apostrophe/quote characters to standard ASCII
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'")  // Smart single quotes to '
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')  // Smart double quotes to "
+    // Normalize various dash/hyphen characters
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g, '-')
+    // Normalize whitespace (multiple spaces, tabs, etc. to single space)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Check if group name matches any in the list (case-insensitive partial match)
+ * Handles special characters like smart quotes/apostrophes that WhatsApp may use
  * @param {string} groupName - Group name to check
  * @param {string[]} groupList - List of group names to match against
  * @returns {boolean} True if matches
@@ -190,11 +210,12 @@ async function getSenderName(msg, client) {
 function matchesGroupName(groupName, groupList) {
   if (!groupName || !groupList || groupList.length === 0) return false;
   
-  const lowerGroupName = groupName.toLowerCase();
-  return groupList.some(name => 
-    lowerGroupName.includes(name.toLowerCase()) || 
-    name.toLowerCase().includes(lowerGroupName)
-  );
+  const normalizedGroupName = normalizeForComparison(groupName);
+  return groupList.some(name => {
+    const normalizedConfigName = normalizeForComparison(name);
+    return normalizedGroupName.includes(normalizedConfigName) || 
+           normalizedConfigName.includes(normalizedGroupName);
+  });
 }
 
 /**
@@ -241,14 +262,62 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
       return await fn();
     } catch (error) {
       lastError = error;
-      if (i < maxRetries - 1) {
-        const delay = baseDelay * Math.pow(2, i);
+      
+      // Check if error is retryable
+      const isRetryable = isRetryableError(error);
+      
+      if (i < maxRetries - 1 && isRetryable) {
+        // Add jitter to prevent thundering herd
+        const jitter = Math.random() * 500;
+        const delay = Math.min(baseDelay * Math.pow(2, i) + jitter, 30000); // Max 30s delay
         await sleep(delay);
+      } else if (!isRetryable) {
+        // Don't retry non-retryable errors
+        break;
       }
     }
   }
   
   throw lastError;
+}
+
+/**
+ * Check if an error is retryable (network issues, timeouts, rate limits)
+ * @param {Error} error - The error to check
+ * @returns {boolean} True if the error is retryable
+ */
+function isRetryableError(error) {
+  if (!error) return false;
+  
+  const retryableCodes = [
+    'ECONNRESET', 'ENOTFOUND', 'ESOCKETTIMEDOUT', 
+    'ETIMEDOUT', 'ECONNREFUSED', 'EHOSTUNREACH',
+    'EPIPE', 'EAI_AGAIN'
+  ];
+  
+  const retryableStatusCodes = [408, 429, 500, 502, 503, 504];
+  
+  // Check error code
+  if (error.code && retryableCodes.includes(error.code)) {
+    return true;
+  }
+  
+  // Check HTTP status code (from axios errors)
+  if (error.response && retryableStatusCodes.includes(error.response.status)) {
+    return true;
+  }
+  
+  // Check for timeout errors
+  if (error.message && (error.message.includes('timeout') || error.message.includes('TIMEOUT'))) {
+    return true;
+  }
+  
+  // Check for network errors
+  if (error.message && error.message.includes('Network Error')) {
+    return true;
+  }
+  
+  return false;
 }
 
 module.exports = {
@@ -262,8 +331,10 @@ module.exports = {
   isGroupChat,
   getPhoneFromJid,
   getSenderName,
+  normalizeForComparison,
   matchesGroupName,
   generateId,
   cleanOldFiles,
-  retryWithBackoff
+  retryWithBackoff,
+  isRetryableError
 };

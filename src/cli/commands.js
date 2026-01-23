@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('dotenv').config();
 const { program } = require('commander');
 const inquirer = require('inquirer');
 const fs = require('fs-extra');
@@ -94,7 +95,7 @@ function showSystem() {
 }
 
 /**
- * Test TMDB API connection
+ * Test TMDB API connection with retry logic for transient network errors
  */
 async function testTMDB() {
   console.log(chalk.blue('\n🎬 Testing TMDB API\n'));
@@ -106,22 +107,55 @@ async function testTMDB() {
     return;
   }
 
-  try {
-    const start = Date.now();
-    const response = await axios.get('https://api.themoviedb.org/3/configuration', {
-      params: { api_key: apiKey },
-      timeout: 10000
-    });
-    const duration = Date.now() - start;
-    
-    console.log(chalk.green(`  ✓ TMDB API connected successfully`));
-    console.log(chalk.gray(`  Response time: ${duration}ms`));
-    console.log(chalk.gray(`  Base URL: ${response.data.images.base_url}\n`));
-  } catch (error) {
-    if (error.response?.status === 401) {
-      console.log(chalk.red('  ❌ Invalid API key\n'));
-    } else {
-      console.log(chalk.red(`  ❌ Connection failed: ${error.message}\n`));
+  const maxRetries = 3;
+  const retryDelay = 2000; // 2 seconds between retries
+  
+  // Network error codes that are retryable
+  const retryableErrors = ['ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN'];
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 1) {
+        console.log(chalk.yellow(`  Retry attempt ${attempt}/${maxRetries}...`));
+      }
+      
+      const start = Date.now();
+      const response = await axios.get('https://api.themoviedb.org/3/configuration', {
+        params: { api_key: apiKey },
+        timeout: 15000 // Increased timeout
+      });
+      const duration = Date.now() - start;
+      
+      console.log(chalk.green(`  ✓ TMDB API connected successfully`));
+      console.log(chalk.gray(`  Response time: ${duration}ms`));
+      console.log(chalk.gray(`  Base URL: ${response.data.images.base_url}\n`));
+      return; // Success, exit function
+    } catch (error) {
+      const isRetryable = retryableErrors.includes(error.code) || 
+                          error.message?.includes('ECONNRESET') ||
+                          error.message?.includes('timeout');
+      
+      if (error.response?.status === 401) {
+        console.log(chalk.red('  ❌ Invalid API key\n'));
+        return; // Don't retry invalid API key
+      }
+      
+      if (isRetryable && attempt < maxRetries) {
+        console.log(chalk.yellow(`  ⚠️  Network error (${error.code || error.message}), retrying in ${retryDelay/1000}s...`));
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        continue;
+      }
+      
+      // Final failure
+      console.log(chalk.red(`  ❌ Connection failed: ${error.message}`));
+      if (isRetryable) {
+        console.log(chalk.yellow('\n  💡 This appears to be a network issue. Please check:'));
+        console.log(chalk.gray('     - Your internet connection'));
+        console.log(chalk.gray('     - Firewall/proxy settings'));
+        console.log(chalk.gray('     - Try again in a few minutes\n'));
+      } else {
+        console.log('');
+      }
     }
   }
 }
