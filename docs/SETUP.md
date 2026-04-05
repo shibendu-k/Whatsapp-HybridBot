@@ -310,6 +310,11 @@ docker compose down
 
 These keep your sessions, logs, and account configuration persistent on the host.
 
+### Health Port Mapping Note
+
+Container internal health server always runs on port `8080`.
+Set `HEALTH_CHECK_PORT` in `.env` only to change the host-side exposed port.
+
 ## Post-Installation
 
 ### Configure Multiple Accounts

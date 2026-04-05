@@ -7,7 +7,6 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 COPY config ./config
-COPY ecosystem.config.js ./
 
 EXPOSE 8080
 
