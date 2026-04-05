@@ -256,9 +256,59 @@ If you want to access health dashboard from outside:
 sudo ufw allow 8080
 ```
 
-## Installation with Docker (Future)
+## Installation with Docker
 
-Docker support is planned for future releases. For now, use native installation.
+### Step 1: Prepare Environment
+
+```bash
+# From project root
+cp .env.example .env
+
+# Edit .env and set your TMDB key
+nano .env
+```
+
+Make sure this value is set:
+
+```env
+TMDB_API_KEY=your_actual_api_key_here
+```
+
+### Step 2: Configure Accounts
+
+Use the existing account template or edit your current config:
+
+```bash
+cp config/accounts.example.json config/accounts.json
+nano config/accounts.json
+```
+
+### Step 3: Build and Start with Docker Compose
+
+```bash
+docker compose up -d --build
+```
+
+### Step 4: Watch Logs
+
+```bash
+docker compose logs -f
+```
+
+### Step 5: Stop the Bot
+
+```bash
+docker compose down
+```
+
+### Docker Volumes Used
+
+- `./sessions` → `/app/sessions`
+- `./temp_storage` → `/app/temp_storage`
+- `./logs` → `/app/logs`
+- `./config/accounts.json` → `/app/config/accounts.json`
+
+These keep your sessions, logs, and account configuration persistent on the host.
 
 ## Post-Installation
 
