@@ -117,7 +117,7 @@ async function testTMDB() {
       return;
     }
 
-    if (result.message.includes('401')) {
+    if (result.message?.includes('401')) {
       console.log(chalk.red('  ❌ Invalid API key\n'));
       return;
     }

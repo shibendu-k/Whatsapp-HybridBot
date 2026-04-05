@@ -12,13 +12,12 @@ class TMDBService {
     this.maxRetries = parseInt(process.env.MAX_RETRIES) || 10;
     this.cache = new Map();
     this.cacheExpiry = 3600000; // 1 hour
-    this.httpAgent = new http.Agent({ keepAlive: true });
-    this.httpsAgent = new https.Agent({ keepAlive: true });
+    this.httpAgent = new http.Agent({ keepAlive: true, family: 4 });
+    this.httpsAgent = new https.Agent({ keepAlive: true, family: 4 });
     
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: this.timeout,
-      family: 4,
       httpAgent: this.httpAgent,
       httpsAgent: this.httpsAgent,
       headers: {
@@ -355,7 +354,6 @@ class TMDBService {
       const response = await axios.get(url, {
         responseType: 'arraybuffer',
         timeout: this.timeout,
-        family: 4,
         httpAgent: this.httpAgent,
         httpsAgent: this.httpsAgent
       });
