@@ -5,6 +5,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
 const axios = require('axios');
+const TMDBService = require('../services/tmdb');
 
 /**
  * Show health dashboard URL
@@ -107,16 +108,21 @@ async function testTMDB() {
   }
 
   try {
-    const start = Date.now();
-    const response = await axios.get('https://api.themoviedb.org/3/configuration', {
-      params: { api_key: apiKey },
-      timeout: 10000
-    });
-    const duration = Date.now() - start;
-    
-    console.log(chalk.green(`  ✓ TMDB API connected successfully`));
-    console.log(chalk.gray(`  Response time: ${duration}ms`));
-    console.log(chalk.gray(`  Base URL: ${response.data.images.base_url}\n`));
+    const tmdb = new TMDBService();
+    const result = await tmdb.testConnection();
+
+    if (result.success) {
+      console.log(chalk.green('  ✓ TMDB API connected successfully'));
+      console.log(chalk.gray(`  Response time: ${result.duration}ms\n`));
+      return;
+    }
+
+    if (result.message.includes('401')) {
+      console.log(chalk.red('  ❌ Invalid API key\n'));
+      return;
+    }
+
+    console.log(chalk.red(`  ❌ Connection failed: ${result.message.replace('TMDB API connection failed: ', '')}\n`));
   } catch (error) {
     if (error.response?.status === 401) {
       console.log(chalk.red('  ❌ Invalid API key\n'));
