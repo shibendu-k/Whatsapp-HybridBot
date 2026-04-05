@@ -374,11 +374,12 @@ class TMDBService {
       const response = await retryWithBackoff(async () => this.client.get('/configuration', {
         params: { api_key: this.apiKey }
       }), this.maxRetries, 1000);
-      const status = response?.status || 0;
+      const status = response.status;
 
       if (status !== 200) {
         return {
           success: false,
+          status,
           message: `TMDB API connection failed: HTTP ${status}`
         };
       }
@@ -387,6 +388,7 @@ class TMDBService {
 
       return {
         success: true,
+        status,
         duration,
         message: `TMDB API connected successfully (${duration}ms)`
       };

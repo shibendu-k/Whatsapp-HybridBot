@@ -117,18 +117,14 @@ async function testTMDB() {
       return;
     }
 
-    if (result.message?.includes('401')) {
+    if (result.status === 401 || result.message?.includes('HTTP 401')) {
       console.log(chalk.red('  ❌ Invalid API key\n'));
       return;
     }
 
     console.log(chalk.red(`  ❌ Connection failed: ${result.message.replace('TMDB API connection failed: ', '')}\n`));
   } catch (error) {
-    if (error.response?.status === 401) {
-      console.log(chalk.red('  ❌ Invalid API key\n'));
-    } else {
-      console.log(chalk.red(`  ❌ Connection failed: ${error.message}\n`));
-    }
+    console.log(chalk.red(`  ❌ Connection failed: ${error.message}\n`));
   }
 }
 
