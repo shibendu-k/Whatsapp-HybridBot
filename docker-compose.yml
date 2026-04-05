@@ -8,9 +8,9 @@ services:
     env_file:
       - .env
     ports:
-      - "${HEALTH_CHECK_PORT:-8080}:${HEALTH_CHECK_PORT:-8080}"
+      - "${HEALTH_CHECK_PORT:-8080}:8080"
     volumes:
       - ./sessions:/app/sessions
       - ./temp_storage:/app/temp_storage
       - ./logs:/app/logs
-      - ./config:/app/config
+      - ./config/accounts.json:/app/config/accounts.json:ro
