@@ -1,4 +1,6 @@
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const logger = require('../utils/logger');
 const { retryWithBackoff, sleep } = require('../utils/helpers');
 
@@ -10,10 +12,14 @@ class TMDBService {
     this.maxRetries = parseInt(process.env.MAX_RETRIES) || 10;
     this.cache = new Map();
     this.cacheExpiry = 3600000; // 1 hour
+    this.httpAgent = new http.Agent({ keepAlive: true, family: 4 });
+    this.httpsAgent = new https.Agent({ keepAlive: true, family: 4 });
     
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: this.timeout,
+      httpAgent: this.httpAgent,
+      httpsAgent: this.httpsAgent,
       headers: {
         'Accept': 'application/json'
       }
@@ -347,7 +353,9 @@ class TMDBService {
     try {
       const response = await axios.get(url, {
         responseType: 'arraybuffer',
-        timeout: this.timeout
+        timeout: this.timeout,
+        httpAgent: this.httpAgent,
+        httpsAgent: this.httpsAgent
       });
       return Buffer.from(response.data);
     } catch (error) {
@@ -363,13 +371,24 @@ class TMDBService {
   async testConnection() {
     try {
       const start = Date.now();
-      const response = await this.client.get('/configuration', {
+      const response = await retryWithBackoff(async () => this.client.get('/configuration', {
         params: { api_key: this.apiKey }
-      });
+      }), this.maxRetries, 1000);
+      const status = response.status;
+
+      if (status !== 200) {
+        return {
+          success: false,
+          status,
+          message: `TMDB API connection failed: HTTP ${status}`
+        };
+      }
+
       const duration = Date.now() - start;
-      
+
       return {
         success: true,
+        status,
         duration,
         message: `TMDB API connected successfully (${duration}ms)`
       };
