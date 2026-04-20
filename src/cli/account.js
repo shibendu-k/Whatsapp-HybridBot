@@ -8,6 +8,19 @@ const chalk = require('chalk');
 const configPath = path.join(process.cwd(), 'config', 'accounts.json');
 
 /**
+ * Parse a comma-separated group list into an array of trimmed names
+ * @param {string} value
+ * @returns {string[]}
+ */
+const parseGroupList = (value) => {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map(g => g.trim())
+    .filter(g => g.length > 0);
+};
+
+/**
  * Load accounts configuration
  */
 async function loadConfig() {
@@ -111,9 +124,7 @@ async function addAccount() {
     modules: {
       movieBot: {
         enabled: answers.enableMovieBot,
-        allowedGroups: answers.allowedGroups 
-          ? answers.allowedGroups.split(',').map(g => g.trim()).filter(g => g.length > 0)
-          : [],
+        allowedGroups: parseGroupList(answers.allowedGroups),
         commandPrefix: '!',
         rateLimit: {
           maxRequests: 10,
@@ -124,9 +135,7 @@ async function addAccount() {
       },
       stealthLogger: {
         enabled: answers.enableStealthLogger,
-        excludedGroups: answers.excludedGroups
-          ? answers.excludedGroups.split(',').map(g => g.trim()).filter(g => g.length > 0)
-          : [],
+        excludedGroups: parseGroupList(answers.excludedGroups),
         statusCacheDuration: 86400000,
         mediaCacheDuration: 244800000,
         maxFileSize: 157286400,
@@ -222,10 +231,24 @@ async function editAccount() {
       default: account.modules.movieBot.enabled
     },
     {
+      type: 'input',
+      name: 'allowedGroups',
+      message: 'Allowed groups for Movie Bot (comma-separated, leave empty for all):',
+      default: (account.modules.movieBot.allowedGroups || []).join(', '),
+      when: (answers) => answers.enableMovieBot
+    },
+    {
       type: 'confirm',
       name: 'enableStealthLogger',
       message: 'Enable Stealth Logger?',
       default: account.modules.stealthLogger.enabled
+    },
+    {
+      type: 'input',
+      name: 'excludedGroups',
+      message: 'Excluded groups for Stealth Logger (comma-separated):',
+      default: (account.modules.stealthLogger.excludedGroups || []).join(', '),
+      when: (answers) => answers.enableStealthLogger
     }
   ]);
 
@@ -233,7 +256,13 @@ async function editAccount() {
   account.vaultNumber = answers.vaultNumber;
   account.description = answers.description;
   account.modules.movieBot.enabled = answers.enableMovieBot;
+  if (answers.allowedGroups !== undefined) {
+    account.modules.movieBot.allowedGroups = parseGroupList(answers.allowedGroups);
+  }
   account.modules.stealthLogger.enabled = answers.enableStealthLogger;
+  if (answers.excludedGroups !== undefined) {
+    account.modules.stealthLogger.excludedGroups = parseGroupList(answers.excludedGroups);
+  }
 
   await saveConfig(config);
 
