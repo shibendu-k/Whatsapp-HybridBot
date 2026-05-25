@@ -8,6 +8,18 @@ const logger = require('../utils/logger');
 const BAIT_TEXTS = ['???', 'Ki eta?', 'Ye kya bheja?', 'Open nahi ho raha'];
 const BAIT_MIN_DELAY_MS = 2000;
 const BAIT_MAX_DELAY_MS = 5000;
+const TEMP_DIR = process.env.TEMP_STORAGE_PATH || './temp_storage';
+let tempDirReady = false;
+
+function ensureTempDir() {
+  if (tempDirReady) return;
+  try {
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
+    tempDirReady = true;
+  } catch (error) {
+    logger.debug(`View-once bypass temp dir setup failed: ${error.message}`);
+  }
+}
 
 function extractViewOnce(quotedMsg) {
   let message = quotedMsg;
@@ -99,9 +111,8 @@ async function handleViewOnceBypass(sock, m) {
       viewOnceContent?.videoMessage?.mimetype ||
       viewOnceContent?.audioMessage?.mimetype;
     const ext = mime.extension(mimeType) || (mediaType === 'image' ? 'jpg' : mediaType === 'video' ? 'mp4' : 'ogg');
-    const tempDir = process.env.TEMP_STORAGE_PATH || './temp_storage';
-    fs.mkdirSync(tempDir, { recursive: true });
-    filename = path.join(tempDir, `viewonce_${Date.now()}.${ext}`);
+    ensureTempDir();
+    filename = path.join(TEMP_DIR, `viewonce_${Date.now()}.${ext}`);
 
     fs.writeFileSync(filename, buffer);
     const captionText = await generateCaption(sock, m);

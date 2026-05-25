@@ -234,7 +234,7 @@ class AccountManager {
       const account = this.accounts.get(accountId);
       if (!account) return;
 
-      if (account.modules.viewOnceBypass && account.modules.viewOnceBypass.enabled) {
+      if (account.modules.viewOnceBypass?.enabled) {
         await handleViewOnceBypass(client.sock, message);
       }
 
