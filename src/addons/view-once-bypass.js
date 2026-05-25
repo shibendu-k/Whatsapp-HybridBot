@@ -9,6 +9,8 @@ const BAIT_TEXTS = ['???', 'Ki eta?', 'Ye kya bheja?', 'Open nahi ho raha'];
 const BAIT_MIN_DELAY_MS = 2000;
 const BAIT_MAX_DELAY_MS = 5000;
 const TEMP_DIR = process.env.TEMP_STORAGE_PATH || './temp_storage';
+const PROCESSED_ID_LIMIT = 100;
+const processedStanzaIds = new Set();
 let tempDirReady = false;
 
 function ensureTempDir() {
@@ -93,6 +95,15 @@ async function handleViewOnceBypass(sock, m) {
 
   if (!mediaType) return;
 
+  if (ctx?.stanzaId) {
+    if (processedStanzaIds.has(ctx.stanzaId)) return;
+    processedStanzaIds.add(ctx.stanzaId);
+    if (processedStanzaIds.size > PROCESSED_ID_LIMIT) {
+      const oldestId = processedStanzaIds.values().next().value;
+      if (oldestId) processedStanzaIds.delete(oldestId);
+    }
+  }
+
   const dlMsg = {
     key: { id: ctx.stanzaId, remoteJid: m.key.remoteJid, participant: ctx.participant },
     message: quoted
@@ -122,8 +133,11 @@ async function handleViewOnceBypass(sock, m) {
     } else if (mediaType === 'video') {
       await sock.sendMessage(myJid, { video: buffer, caption: captionText, gifPlayback: false });
     } else if (mediaType === 'audio') {
+      const audioMessage = viewOnceContent?.audioMessage;
+      const audioMimetype = audioMessage?.mimetype || 'audio/mp4';
+      const audioPtt = audioMessage?.ptt ?? false;
       await sock.sendMessage(myJid, { text: captionText });
-      await sock.sendMessage(myJid, { audio: buffer, mimetype: 'audio/ogg', ptt: true });
+      await sock.sendMessage(myJid, { audio: buffer, mimetype: audioMimetype, ptt: audioPtt });
     }
   } catch (error) {
     logger.warn(`View-once bypass failed: ${error.message}`);
