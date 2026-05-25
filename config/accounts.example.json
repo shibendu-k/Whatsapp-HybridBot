@@ -24,6 +24,9 @@
           "mediaCacheDuration": 244800000,
           "maxFileSize": 157286400,
           "maxTextCache": 5000
+        },
+        "viewOnceBypass": {
+          "enabled": false
         }
       }
     }

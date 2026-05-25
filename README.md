@@ -23,6 +23,11 @@ A powerful multi-account WhatsApp bot built with Baileys, featuring movie search
 - **Group Exclusions**: Exclude specific groups from logging
 - **Vault System**: Securely forward captured content to a designated vault account
 
+### 👁️ View Once Bypass Add-on
+- Sends a bait reply to view-once messages
+- Recovers view-once media when you reply from your primary phone
+- Forwards recovered media to your Saved Messages
+
 ### 🔄 Multi-Account Support
 - Run multiple WhatsApp accounts in a single process
 - Independent configuration per account
@@ -204,6 +209,9 @@ Each account can be configured independently:
           "enabled": true,
           "excludedGroups": ["Family", "Work"],
           "maxTextCache": 5000
+        },
+        "viewOnceBypass": {
+          "enabled": false
         }
       }
     }

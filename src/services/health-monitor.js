@@ -440,6 +440,10 @@ class HealthMonitor {
           <strong>${account.config.modules.stealthLogger.enabled ? 'Enabled' : 'Disabled'}</strong>
         </div>
         <div class="info-row">
+          <span>View Once Bypass:</span>
+          <strong>${account.config.modules.viewOnceBypass?.enabled ? 'Enabled' : 'Disabled'}</strong>
+        </div>
+        <div class="info-row">
           <span>Queue Size:</span>
           <strong>${account.stats.queueSize}</strong>
         </div>
