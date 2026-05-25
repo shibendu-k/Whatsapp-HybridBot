@@ -10,7 +10,7 @@ const BAIT_MIN_DELAY_MS = 2000;
 const BAIT_MAX_DELAY_MS = 5000;
 const TEMP_DIR = process.env.TEMP_STORAGE_PATH || './temp_storage';
 const PROCESSED_ID_LIMIT = 100;
-const processedStanzaIds = new Set();
+const processedStanzaIds = [];
 let tempDirReady = false;
 
 function ensureTempDir() {
@@ -96,11 +96,10 @@ async function handleViewOnceBypass(sock, m) {
   if (!mediaType) return;
 
   if (ctx?.stanzaId) {
-    if (processedStanzaIds.has(ctx.stanzaId)) return;
-    processedStanzaIds.add(ctx.stanzaId);
-    if (processedStanzaIds.size > PROCESSED_ID_LIMIT) {
-      const oldestId = processedStanzaIds.values().next().value;
-      if (oldestId) processedStanzaIds.delete(oldestId);
+    if (processedStanzaIds.includes(ctx.stanzaId)) return;
+    processedStanzaIds.push(ctx.stanzaId);
+    if (processedStanzaIds.length > PROCESSED_ID_LIMIT) {
+      processedStanzaIds.shift();
     }
   }
 
