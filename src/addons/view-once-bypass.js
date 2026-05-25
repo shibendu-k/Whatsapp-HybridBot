@@ -98,9 +98,10 @@ async function handleViewOnceBypass(sock, m) {
   if (ctx?.stanzaId) {
     if (processedStanzaIds.has(ctx.stanzaId)) return;
     processedStanzaIds.add(ctx.stanzaId);
-    if (processedStanzaIds.size > PROCESSED_ID_LIMIT) {
+    while (processedStanzaIds.size > PROCESSED_ID_LIMIT) {
       const oldestId = processedStanzaIds.values().next().value;
-      if (oldestId) processedStanzaIds.delete(oldestId);
+      if (!oldestId) break;
+      processedStanzaIds.delete(oldestId);
     }
   }
 
