@@ -80,6 +80,9 @@ Location: `/config/accounts.json`
           "mediaCacheDuration": 244800000,
           "maxFileSize": 157286400,
           "maxTextCache": 5000
+        },
+        "viewOnceBypass": {
+          "enabled": false
         }
       }
     }
@@ -185,6 +188,12 @@ Maximum number of text messages to cache.
 - Default: `5000`
 - Oldest messages removed when limit reached
 - Prevents unlimited memory growth
+
+### View Once Bypass Configuration
+
+#### `viewOnceBypass.enabled` (boolean)
+Enable/disable the View Once Bypass add-on.
+- Default: `false`
 
 ### Global Settings (config/default.json)
 

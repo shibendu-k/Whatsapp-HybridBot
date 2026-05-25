@@ -5,6 +5,7 @@ const BaileysClient = require('./baileys-client');
 const StealthLoggerService = require('./services/stealth-logger');
 const TMDBService = require('./services/tmdb');
 const CommandRouter = require('./services/command-router');
+const { handleViewOnceBypass } = require('./addons/view-once-bypass');
 const { isGroupChat, getPhoneFromJid, getMessageContent, getSenderName, sleep } = require('./utils/helpers');
 
 class AccountManager {
@@ -232,6 +233,10 @@ class AccountManager {
 
       const account = this.accounts.get(accountId);
       if (!account) return;
+
+      if (account.modules.viewOnceBypass && account.modules.viewOnceBypass.enabled) {
+        await handleViewOnceBypass(client.sock, message);
+      }
 
       // Extract message info
       const { key, message: msgContent, messageTimestamp } = message;

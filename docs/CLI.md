@@ -50,7 +50,8 @@ npm run account:add
 4. Enable Movie Bot? (y/n)
 5. Allowed groups (comma-separated)
 6. Enable Stealth Logger? (y/n)
-7. Excluded groups (comma-separated)
+7. Enable View Once Bypass? (y/n)
+8. Excluded groups (comma-separated)
 
 **Example:**
 ```bash
@@ -64,6 +65,7 @@ $ npm run account:add
 ? Enable Movie Bot module? Yes
 ? Allowed groups for Movie Bot: Movies, Cinema
 ? Enable Stealth Logger module? Yes
+? Enable View Once Bypass module? No
 ? Excluded groups for Stealth Logger: Family, Work
 
 ✅ Account 'personal' added successfully!
@@ -91,6 +93,7 @@ personal ● ENABLED
   Vault: +919876543210
   Movie Bot: ✓
   Stealth Logger: ✓
+  View Once Bypass: ✗
 
 work ○ DISABLED
   Description: Work Account
@@ -116,6 +119,7 @@ npm run account:edit
 3. Update description
 4. Enable/disable Movie Bot
 5. Enable/disable Stealth Logger
+6. Enable/disable View Once Bypass
 
 **Example:**
 ```bash
@@ -126,6 +130,7 @@ $ npm run account:edit
 ? Description: Personal Account - Updated
 ? Enable Movie Bot? Yes
 ? Enable Stealth Logger? Yes
+? Enable View Once Bypass? No
 
 ✅ Account 'personal' updated successfully!
 Restart the bot for changes to take effect: npm run restart

@@ -86,6 +86,12 @@ async function addAccount() {
       default: true
     },
     {
+      type: 'confirm',
+      name: 'enableViewOnceBypass',
+      message: 'Enable View Once Bypass module?',
+      default: false
+    },
+    {
       type: 'input',
       name: 'excludedGroups',
       message: 'Excluded groups for Stealth Logger (comma-separated):',
@@ -131,6 +137,9 @@ async function addAccount() {
         mediaCacheDuration: 244800000,
         maxFileSize: 157286400,
         maxTextCache: 5000
+      },
+      viewOnceBypass: {
+        enabled: answers.enableViewOnceBypass
       }
     }
   };
@@ -168,6 +177,7 @@ async function listAccounts() {
     console.log(`  Vault: ${account.vaultNumber}`);
     console.log(`  Movie Bot: ${account.modules.movieBot.enabled ? chalk.green('✓') : chalk.gray('✗')}`);
     console.log(`  Stealth Logger: ${account.modules.stealthLogger.enabled ? chalk.green('✓') : chalk.gray('✗')}`);
+    console.log(`  View Once Bypass: ${account.modules.viewOnceBypass?.enabled ? chalk.green('✓') : chalk.gray('✗')}`);
   });
 
   console.log(chalk.gray('\n' + '─'.repeat(80) + '\n'));
@@ -201,6 +211,7 @@ async function editAccount() {
     console.log(chalk.red('\n❌ Account not found\n'));
     return;
   }
+  account.modules.viewOnceBypass = account.modules.viewOnceBypass || { enabled: false };
 
   const answers = await inquirer.prompt([
     {
@@ -226,6 +237,12 @@ async function editAccount() {
       name: 'enableStealthLogger',
       message: 'Enable Stealth Logger?',
       default: account.modules.stealthLogger.enabled
+    },
+    {
+      type: 'confirm',
+      name: 'enableViewOnceBypass',
+      message: 'Enable View Once Bypass?',
+      default: account.modules.viewOnceBypass.enabled
     }
   ]);
 
@@ -234,6 +251,7 @@ async function editAccount() {
   account.description = answers.description;
   account.modules.movieBot.enabled = answers.enableMovieBot;
   account.modules.stealthLogger.enabled = answers.enableStealthLogger;
+  account.modules.viewOnceBypass.enabled = answers.enableViewOnceBypass;
 
   await saveConfig(config);
 
