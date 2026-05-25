@@ -60,8 +60,7 @@ async function handleViewOnceBypass(sock, m) {
   if (!m.key.fromMe) {
     const isViewOnce = m.message?.viewOnceMessage ||
       m.message?.viewOnceMessageV2 ||
-      m.message?.viewOnceMessageV2Extension ||
-      m.messageStubType;
+      m.message?.viewOnceMessageV2Extension;
 
     if (isViewOnce) {
       const delay = Math.floor(Math.random() * (BAIT_MAX_DELAY_MS - BAIT_MIN_DELAY_MS + 1)) + BAIT_MIN_DELAY_MS;
