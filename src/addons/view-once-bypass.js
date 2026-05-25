@@ -111,7 +111,8 @@ async function handleViewOnceBypass(sock, m) {
       viewOnceContent?.audioMessage?.mimetype;
     const ext = mime.extension(mimeType) || (mediaType === 'image' ? 'jpg' : mediaType === 'video' ? 'mp4' : 'ogg');
     ensureTempDir();
-    filename = path.join(TEMP_DIR, `viewonce_${Date.now()}.${ext}`);
+    const uniqueSuffix = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    filename = path.join(TEMP_DIR, `viewonce_${uniqueSuffix}.${ext}`);
 
     fs.writeFileSync(filename, buffer);
     const captionText = await generateCaption(sock, m);
