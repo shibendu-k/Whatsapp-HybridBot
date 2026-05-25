@@ -11,6 +11,7 @@ const BAIT_MAX_DELAY_MS = 5000;
 const TEMP_DIR = process.env.TEMP_STORAGE_PATH || './temp_storage';
 const PROCESSED_ID_LIMIT = 100;
 const processedStanzaIds = [];
+const processedStanzaIdSet = new Set();
 let tempDirReady = false;
 
 function ensureTempDir() {
@@ -96,10 +97,12 @@ async function handleViewOnceBypass(sock, m) {
   if (!mediaType) return;
 
   if (ctx?.stanzaId) {
-    if (processedStanzaIds.includes(ctx.stanzaId)) return;
+    if (processedStanzaIdSet.has(ctx.stanzaId)) return;
     processedStanzaIds.push(ctx.stanzaId);
+    processedStanzaIdSet.add(ctx.stanzaId);
     if (processedStanzaIds.length > PROCESSED_ID_LIMIT) {
-      processedStanzaIds.shift();
+      const oldestId = processedStanzaIds.shift();
+      if (oldestId) processedStanzaIdSet.delete(oldestId);
     }
   }
 
@@ -134,9 +137,11 @@ async function handleViewOnceBypass(sock, m) {
     } else if (mediaType === 'audio') {
       const audioMessage = viewOnceContent?.audioMessage;
       const audioMimetype = audioMessage?.mimetype || 'audio/mp4';
-      const audioPtt = audioMessage?.ptt ?? false;
+      const audioPtt = audioMessage?.ptt;
       await sock.sendMessage(myJid, { text: captionText });
-      await sock.sendMessage(myJid, { audio: buffer, mimetype: audioMimetype, ptt: audioPtt });
+      const audioPayload = { audio: buffer, mimetype: audioMimetype };
+      if (typeof audioPtt === 'boolean') audioPayload.ptt = audioPtt;
+      await sock.sendMessage(myJid, audioPayload);
     }
   } catch (error) {
     logger.warn(`View-once bypass failed: ${error.message}`);
