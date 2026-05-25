@@ -32,7 +32,7 @@ function extractViewOnce(quotedMsg) {
   return message;
 }
 
-async function generateCaption(sock, m) {
+async function generateCaption(sock, m, ctx) {
   const isGroup = m.key.remoteJid?.endsWith('@g.us');
   let chatInfo = 'Personal Chat';
 
@@ -45,13 +45,12 @@ async function generateCaption(sock, m) {
     }
   }
 
-  const senderJid = m.key.participant || m.key.remoteJid;
-  const senderNum = senderJid ? senderJid.split('@')[0] : '';
-  const maskedNum = senderNum ? `xxxxxx${senderNum.slice(-4)}` : 'xxxxxx';
-  const senderName = m.pushName || 'Unknown Sender';
+  const senderJid = ctx?.participant || m.key.remoteJid;
+  const cleanNumber = senderJid ? senderJid.split('@')[0].split(':')[0] : '';
+  const maskedNum = cleanNumber ? `xxxxxx${cleanNumber.slice(-4)}` : 'xxxxxx';
   const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-  return `👁️ *View Once Recovered*\n\n🕒 *Time:* ${timestamp}\n💬 *Chat:* ${chatInfo}\n👤 *Name:* ${senderName}\n📞 *Number:* ${maskedNum}`;
+  return `👁️ *View Once Recovered*\n\n🕒 *Time:* ${timestamp}\n💬 *Chat:* ${chatInfo}\n📞 *Number:* ${maskedNum}`;
 }
 
 async function handleViewOnceBypass(sock, m) {
@@ -95,9 +94,10 @@ async function handleViewOnceBypass(sock, m) {
 
   if (!mediaType) return;
 
-  if (ctx?.stanzaId) {
-    if (processedStanzaIds.includes(ctx.stanzaId)) return;
-    processedStanzaIds.push(ctx.stanzaId);
+  const messageId = m.key.id;
+  if (messageId) {
+    if (processedStanzaIds.includes(messageId)) return;
+    processedStanzaIds.push(messageId);
     if (processedStanzaIds.length > PROCESSED_ID_LIMIT) processedStanzaIds.shift();
   }
 
@@ -123,7 +123,7 @@ async function handleViewOnceBypass(sock, m) {
     filename = path.join(TEMP_DIR, `viewonce_${uniqueSuffix}.${ext}`);
 
     fs.writeFileSync(filename, buffer);
-    const captionText = await generateCaption(sock, m);
+    const captionText = await generateCaption(sock, m, ctx);
 
     if (mediaType === 'image') {
       await sock.sendMessage(myJid, { image: buffer, caption: captionText });
@@ -132,10 +132,8 @@ async function handleViewOnceBypass(sock, m) {
     } else if (mediaType === 'audio') {
       const audioMessage = viewOnceContent?.audioMessage;
       const audioMimetype = audioMessage?.mimetype || 'audio/ogg; codecs=opus';
-      const audioPtt = audioMessage?.ptt;
       await sock.sendMessage(myJid, { text: captionText });
-      const audioPayload = { audio: buffer, mimetype: audioMimetype };
-      if (typeof audioPtt === 'boolean') audioPayload.ptt = audioPtt;
+      const audioPayload = { audio: buffer, mimetype: audioMimetype, ptt: true };
       await sock.sendMessage(myJid, audioPayload);
     }
   } catch (error) {
