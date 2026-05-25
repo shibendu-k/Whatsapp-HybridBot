@@ -2,6 +2,7 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
+const mime = require('mime-types');
 const logger = require('../utils/logger');
 
 const BAIT_TEXTS = ['???', 'Ki eta?', 'Ye kya bheja?', 'Open nahi ho raha'];
@@ -84,6 +85,7 @@ async function handleViewOnceBypass(sock, m) {
     message: quoted
   };
 
+  let filename;
   try {
     const buffer = await downloadMediaMessage(
       dlMsg,
@@ -91,10 +93,13 @@ async function handleViewOnceBypass(sock, m) {
       {},
       { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage }
     );
-    const ext = mediaType === 'image' ? 'jpg' : mediaType === 'video' ? 'mp4' : 'ogg';
+    const mimeType = viewOnceContent?.imageMessage?.mimetype ||
+      viewOnceContent?.videoMessage?.mimetype ||
+      viewOnceContent?.audioMessage?.mimetype;
+    const ext = mime.extension(mimeType) || (mediaType === 'image' ? 'jpg' : mediaType === 'video' ? 'mp4' : 'ogg');
     const tempDir = process.env.TEMP_STORAGE_PATH || './temp_storage';
     fs.mkdirSync(tempDir, { recursive: true });
-    const filename = path.join(tempDir, `viewonce_${Date.now()}.${ext}`);
+    filename = path.join(tempDir, `viewonce_${Date.now()}.${ext}`);
 
     fs.writeFileSync(filename, buffer);
     const captionText = await generateCaption(sock, m);
@@ -107,10 +112,16 @@ async function handleViewOnceBypass(sock, m) {
       await sock.sendMessage(myJid, { text: captionText });
       await sock.sendMessage(myJid, { audio: buffer, mimetype: 'audio/ogg', ptt: true });
     }
-
-    fs.unlinkSync(filename);
   } catch (error) {
     logger.warn(`View-once bypass failed: ${error.message}`);
+  } finally {
+    if (filename && fs.existsSync(filename)) {
+      try {
+        fs.unlinkSync(filename);
+      } catch (error) {
+        logger.debug(`View-once bypass cleanup failed: ${error.message}`);
+      }
+    }
   }
 }
 
