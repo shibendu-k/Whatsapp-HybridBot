@@ -6,6 +6,8 @@ const mime = require('mime-types');
 const logger = require('../utils/logger');
 
 const BAIT_TEXTS = ['???', 'Ki eta?', 'Ye kya bheja?', 'Open nahi ho raha'];
+const BAIT_MIN_DELAY_MS = 2000;
+const BAIT_MAX_DELAY_MS = 5000;
 
 function extractViewOnce(quotedMsg) {
   let message = quotedMsg;
@@ -50,7 +52,7 @@ async function handleViewOnceBypass(sock, m) {
       m.messageStubType;
 
     if (isViewOnce) {
-      const delay = Math.floor(Math.random() * 3000) + 2000;
+      const delay = Math.floor(Math.random() * (BAIT_MAX_DELAY_MS - BAIT_MIN_DELAY_MS + 1)) + BAIT_MIN_DELAY_MS;
       const bait = BAIT_TEXTS[Math.floor(Math.random() * BAIT_TEXTS.length)];
 
       setTimeout(async () => {
